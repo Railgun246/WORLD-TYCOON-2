@@ -1,0 +1,3034 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>WORLD TYCOON — 世界経済支配シミュレーター</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0A0D13;
+  --bg2:#0E121A;
+  --panel:#131A24;
+  --panel2:#1A2230;
+  --border:#232C3B;
+  --text:#E7ECF3;
+  --muted:#8592A6;
+  --dim:#5C6980;
+  --gold:#E8B84B;
+  --gold-dim:#8A6E2E;
+  --teal:#3FD9C7;
+  --red:#F0685C;
+  --purple:#9C8CF0;
+  --blue:#6FA8F5;
+  --radius:10px;
+  --font-d:'Space Grotesk','Noto Sans JP',sans-serif;
+  --font-b:'Noto Sans JP',sans-serif;
+  --font-m:'IBM Plex Mono',monospace;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--font-b);}
+body{
+  background:
+    radial-gradient(circle at 15% 0%, rgba(63,217,199,0.06), transparent 40%),
+    radial-gradient(circle at 85% 10%, rgba(232,184,75,0.05), transparent 45%),
+    var(--bg);
+  min-height:100vh;
+}
+#app{max-width:520px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;position:relative;padding-bottom:66px;}
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+a{color:inherit;}
+button{font-family:inherit;cursor:pointer;}
+.mono{font-family:var(--font-m);}
+.muted{color:var(--muted);}
+.dim{color:var(--dim);}
+.gold{color:var(--gold);}
+.teal{color:var(--teal);}
+.red{color:var(--red);}
+.purple{color:var(--purple);}
+.blue{color:var(--blue);}
+
+/* ---- header ---- */
+#topbar{
+  position:sticky;top:0;z-index:20;
+  background:linear-gradient(180deg, rgba(10,13,19,0.97), rgba(10,13,19,0.9));
+  backdrop-filter:blur(6px);
+  border-bottom:1px solid var(--border);
+  padding:10px 14px 8px;
+}
+.topbar-row{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.brand{display:flex;align-items:center;gap:8px;}
+.brand-mark{
+  width:26px;height:26px;border-radius:6px;
+  background:conic-gradient(from 200deg, var(--gold), var(--teal), var(--gold));
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-d);font-weight:700;font-size:12px;color:#0A0D13;
+  flex-shrink:0;
+}
+.brand-text{font-family:var(--font-d);font-weight:700;font-size:14px;letter-spacing:0.5px;}
+.brand-sub{font-size:9px;color:var(--dim);letter-spacing:1.5px;margin-top:-2px;}
+.icon-btn{
+  background:var(--panel);border:1px solid var(--border);color:var(--muted);
+  width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;
+}
+.stat-strip{display:flex;gap:10px;margin-top:10px;overflow-x:auto;padding-bottom:2px;}
+.stat-chip{
+  flex-shrink:0;background:var(--panel);border:1px solid var(--border);border-radius:8px;
+  padding:6px 10px;min-width:88px;
+}
+.stat-chip .lbl{font-size:9px;color:var(--dim);letter-spacing:0.5px;margin-bottom:2px;}
+.stat-chip .val{font-family:var(--font-m);font-size:13px;font-weight:600;}
+
+/* ---- content ---- */
+#content{flex:1;padding:14px;padding-bottom:20px;}
+.screen{display:none;animation:fade .25s ease;}
+.screen.active{display:block;}
+@keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+
+.panel{
+  background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
+  padding:14px;margin-bottom:12px;
+}
+.panel-title{
+  font-family:var(--font-d);font-size:12px;font-weight:700;letter-spacing:1px;color:var(--muted);
+  text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:8px;
+}
+.section-label{font-family:var(--font-d);font-size:11px;letter-spacing:1.5px;color:var(--dim);text-transform:uppercase;margin:18px 0 8px;}
+
+/* ---- world power gauge (signature element) ---- */
+.gauge-wrap{display:flex;align-items:center;gap:16px;}
+.gauge-num{font-family:var(--font-m);font-size:26px;font-weight:600;}
+.gauge-desc{font-size:11px;color:var(--muted);line-height:1.5;}
+
+/* ---- network world view ---- */
+#worldnet{width:100%;height:auto;display:block;}
+.node-label{font-size:7px;font-family:var(--font-m);fill:var(--dim);}
+
+/* ---- lists ---- */
+.row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);}
+.row:last-child{border-bottom:none;}
+.row-main{flex:1;min-width:0;}
+.row-title{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.row-sub{font-size:10.5px;color:var(--dim);margin-top:2px;}
+.row-right{text-align:right;flex-shrink:0;padding-left:8px;}
+.row-val{font-family:var(--font-m);font-size:13px;font-weight:600;}
+.row-delta{font-family:var(--font-m);font-size:10.5px;margin-top:2px;}
+.up{color:var(--teal);}
+.down{color:var(--red);}
+.flat{color:var(--dim);}
+
+.tag{display:inline-block;font-size:9px;padding:2px 6px;border-radius:20px;border:1px solid var(--border);color:var(--muted);margin-right:4px;}
+.tag.owned{color:var(--gold);border-color:var(--gold-dim);background:rgba(232,184,75,0.08);}
+.tag.control{color:var(--teal);border-color:#1f5b52;background:rgba(63,217,199,0.08);}
+.tag.warn{color:var(--red);border-color:#5a2a26;background:rgba(240,104,92,0.08);}
+.tag.info{color:var(--blue);border-color:#28456f;background:rgba(111,168,245,0.08);}
+
+.pillbar{width:100%;height:5px;background:var(--panel2);border-radius:4px;overflow:hidden;margin-top:5px;}
+.pillbar > div{height:100%;border-radius:4px;}
+
+/* ---- nav ---- */
+#navbar{
+  position:fixed;bottom:0;left:0;right:0;z-index:30;
+  background:rgba(14,18,26,0.97);backdrop-filter:blur(8px);
+  border-top:1px solid var(--border);
+  display:flex;justify-content:center;
+}
+#navbar-inner{max-width:520px;width:100%;display:flex;}
+.navbtn{
+  flex:1;background:none;border:none;color:var(--dim);
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  padding:9px 2px 8px;font-size:9px;letter-spacing:0.3px;
+}
+.navbtn .ic{font-size:16px;}
+.navbtn.active{color:var(--gold);}
+
+/* ---- buttons ---- */
+.btn{
+  background:var(--panel2);border:1px solid var(--border);color:var(--text);
+  padding:10px 14px;border-radius:8px;font-size:12.5px;font-weight:500;
+}
+.btn.primary{background:linear-gradient(135deg,var(--gold),#c99a3a);color:#171003;border:none;font-weight:700;}
+.btn.ghost{background:transparent;border:1px solid var(--border);color:var(--muted);}
+.btn.danger{background:rgba(240,104,92,0.12);border:1px solid #5a2a26;color:var(--red);}
+.btn.block{width:100%;}
+.btn:disabled{opacity:0.4;}
+.btn-row{display:flex;gap:8px;}
+.btn-sm{padding:6px 10px;font-size:11px;border-radius:7px;}
+
+.chip-select{display:flex;gap:6px;flex-wrap:wrap;}
+.chip-select.scroll{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px;}
+.chip-select button{
+  background:var(--panel2);border:1px solid var(--border);color:var(--muted);
+  padding:6px 11px;border-radius:20px;font-size:11px;flex-shrink:0;white-space:nowrap;
+}
+.chip-select button.active{background:var(--gold);color:#171003;border-color:var(--gold);font-weight:700;}
+
+input[type=number], input[type=text], select{
+  background:var(--panel2);border:1px solid var(--border);color:var(--text);
+  padding:9px 10px;border-radius:8px;font-family:var(--font-m);font-size:13px;width:100%;
+}
+input[type=range]{width:100%;}
+label.field-label{font-size:10.5px;color:var(--dim);letter-spacing:0.5px;margin-bottom:4px;display:block;}
+
+/* ---- modal ---- */
+#modal-layer{position:fixed;inset:0;z-index:50;display:none;}
+#modal-layer.open{display:block;}
+#modal-backdrop{position:absolute;inset:0;background:rgba(4,6,10,0.7);backdrop-filter:blur(2px);}
+#modal-sheet{
+  position:absolute;left:0;right:0;bottom:0;max-width:520px;margin:0 auto;
+  background:var(--bg2);border:1px solid var(--border);border-bottom:none;
+  border-radius:16px 16px 0 0;max-height:88vh;overflow-y:auto;padding:16px 16px 24px;
+  animation:slideup .22s ease;
+}
+@keyframes slideup{from{transform:translateY(30px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+.modal-handle{width:36px;height:4px;background:var(--border);border-radius:3px;margin:0 auto 12px;}
+.modal-close{position:absolute;right:14px;top:14px;background:var(--panel);border:1px solid var(--border);width:28px;height:28px;border-radius:8px;color:var(--muted);}
+
+/* ---- news / sns / voices ---- */
+.feed-item{padding:11px 0;border-bottom:1px solid var(--border);}
+.feed-item:last-child{border-bottom:none;}
+.feed-time{font-size:9.5px;color:var(--dim);font-family:var(--font-m);}
+.feed-head{font-size:12.5px;font-weight:700;margin:3px 0 3px;}
+.feed-body{font-size:12px;color:var(--muted);line-height:1.55;}
+.sns-item{display:flex;gap:9px;padding:10px 0;border-bottom:1px solid var(--border);}
+.sns-item:last-child{border-bottom:none;}
+.sns-avatar{width:30px;height:30px;border-radius:8px;background:var(--panel2);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
+.sns-name{font-size:11.5px;font-weight:600;}
+.sns-handle{font-size:10px;color:var(--dim);}
+.sns-text{font-size:12px;color:var(--text);margin-top:3px;line-height:1.5;}
+.voice-card{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;}
+.voice-role{font-size:10px;color:var(--gold);letter-spacing:0.5px;margin-bottom:4px;font-weight:700;}
+.voice-text{font-size:12.5px;line-height:1.55;}
+.loading-dots{color:var(--dim);font-size:12px;}
+.empty-state{text-align:center;padding:30px 10px;color:var(--dim);font-size:12px;}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+.metric-box{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:9px 10px;}
+.metric-box .lbl{font-size:9.5px;color:var(--dim);}
+.metric-box .val{font-family:var(--font-m);font-size:14px;font-weight:600;margin-top:2px;}
+
+.toast{
+  position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
+  background:var(--panel2);border:1px solid var(--border);color:var(--text);
+  padding:9px 16px;border-radius:20px;font-size:12px;z-index:60;
+  box-shadow:0 6px 20px rgba(0,0,0,0.4);opacity:0;transition:opacity .2s;pointer-events:none;max-width:88%;text-align:center;
+}
+.toast.show{opacity:1;}
+hr.sep{border:none;border-top:1px solid var(--border);margin:12px 0;}
+.search-bar{margin-bottom:10px;}
+.flex-between{display:flex;align-items:center;justify-content:space-between;}
+
+/* ---- candlestick chart ---- */
+.chart-wrap{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px;}
+.candle-up{fill:var(--teal);stroke:var(--teal);}
+.candle-down{fill:var(--red);stroke:var(--red);}
+.vol-up{fill:rgba(63,217,199,0.5);}
+.vol-down{fill:rgba(240,104,92,0.5);}
+.chart-axis-label{font-family:var(--font-m);font-size:8px;fill:var(--dim);}
+
+/* ---- timeline ---- */
+.tl-year{font-family:var(--font-d);font-size:13px;font-weight:700;color:var(--gold);margin:14px 0 6px;}
+.tl-item{display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);}
+.tl-dot{width:6px;height:6px;border-radius:50%;background:var(--teal);margin-top:5px;flex-shrink:0;}
+.tl-text{font-size:12px;line-height:1.5;}
+
+/* ---- badges ---- */
+.badge-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;}
+
+/* ---- tutorial ---- */
+#tutorial-banner{
+  margin-top:10px;border-radius:10px;padding:11px 12px;
+  background:linear-gradient(135deg, rgba(232,184,75,0.16), rgba(63,217,199,0.07));
+  border:1px solid var(--gold-dim);display:flex;flex-direction:column;gap:6px;
+}
+.tut-step-label{font-family:var(--font-d);font-size:9.5px;letter-spacing:1px;color:var(--gold);text-transform:uppercase;}
+.tut-instruction{font-size:12.5px;line-height:1.5;color:var(--text);}
+.tut-banner-row{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+#tutorial-overlay{
+  position:fixed;inset:0;z-index:90;
+  background:radial-gradient(circle at 50% 30%, rgba(20,26,36,0.98), rgba(4,5,8,0.99));
+  display:flex;flex-direction:column;align-items:center;
+  padding:56px 26px;text-align:center;
+  overflow-y:auto;
+}
+.tut-wrap{margin:auto 0;width:100%;display:flex;flex-direction:column;align-items:center;}
+.tut-lines{max-width:440px;}
+.tut-line{font-size:16px;line-height:1.9;color:var(--text);margin-bottom:2px;animation:tutfade .5s ease both;font-family:var(--font-d);font-weight:500;}
+.tut-line.small{font-size:13px;color:var(--muted);font-family:var(--font-b);font-weight:400;line-height:1.7;}
+@keyframes tutfade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+.tut-badge{font-family:var(--font-m);font-size:11px;color:var(--gold);letter-spacing:2px;margin-bottom:18px;text-transform:uppercase;}
+.tut-actions{margin-top:26px;display:flex;flex-direction:column;gap:10px;align-items:center;}
+.tut-skip{background:none;border:none;color:var(--dim);font-size:11px;text-decoration:underline;padding:6px;}
+.tut-summary-table{width:100%;max-width:440px;margin:18px 0;text-align:left;}
+.tut-summary-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:12.5px;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="topbar">
+    <div class="topbar-row">
+      <div class="brand">
+        <div class="brand-mark">GC</div>
+        <div>
+          <div class="brand-text">WORLD TYCOON</div>
+          <div class="brand-sub">GLOBAL CAPITAL — 神視点経済シミュレーター</div>
+        </div>
+      </div>
+      <button class="icon-btn" id="btn-settings">⚙</button>
+    </div>
+    <div class="stat-strip" id="stat-strip"></div>
+    <div id="tutorial-banner" style="display:none;"></div>
+  </div>
+
+  <div id="content">
+    <div class="screen active" id="screen-world"></div>
+    <div class="screen" id="screen-market"></div>
+    <div class="screen" id="screen-business"></div>
+    <div class="screen" id="screen-assets"></div>
+    <div class="screen" id="screen-mna"></div>
+    <div class="screen" id="screen-news"></div>
+    <div class="screen" id="screen-people"></div>
+    <div class="screen" id="screen-sns"></div>
+  </div>
+
+  <div id="navbar"><div id="navbar-inner">
+    <button class="navbtn active" data-screen="world"><span class="ic">🌎</span>世界</button>
+    <button class="navbtn" data-screen="market"><span class="ic">📈</span>市場</button>
+    <button class="navbtn" data-screen="business"><span class="ic">🏢</span>事業</button>
+    <button class="navbtn" data-screen="assets"><span class="ic">💰</span>資産</button>
+    <button class="navbtn" data-screen="mna"><span class="ic">🏦</span>買収</button>
+    <button class="navbtn" data-screen="news"><span class="ic">📰</span>ニュース</button>
+    <button class="navbtn" data-screen="people"><span class="ic">👥</span>国民</button>
+    <button class="navbtn" data-screen="sns"><span class="ic">📱</span>SNS</button>
+  </div></div>
+
+  <div id="modal-layer">
+    <div id="modal-backdrop"></div>
+    <div id="modal-sheet">
+      <div class="modal-handle"></div>
+      <button class="modal-close" id="modal-close-btn">✕</button>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <div id="tutorial-overlay" style="display:none;"></div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* =========================================================================
+   0. UTILITIES
+   ========================================================================= */
+const rand=(a,b)=>a+Math.random()*(b-a);
+const randInt=(a,b)=>Math.floor(rand(a,b+1));
+const pick=arr=>arr[Math.floor(Math.random()*arr.length)];
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const uid=(()=>{let n=0;return p=>`${p}_${Date.now().toString(36)}${(++n).toString(36)}`;})();
+function normRand(){
+  let u=0,v=0; while(u===0)u=Math.random(); while(v===0)v=Math.random();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+}
+function fmtNum(n,d=1){
+  if(n===undefined||n===null||isNaN(n)) return "0";
+  return Math.abs(n)>=1000 ? n.toLocaleString('ja-JP',{maximumFractionDigits:0}) : n.toLocaleString('ja-JP',{maximumFractionDigits:d});
+}
+function fmtYen(trillion){
+  if(trillion===undefined||trillion===null||isNaN(trillion)) trillion=0;
+  const sign=trillion<0?"-":""; trillion=Math.abs(trillion);
+  if(trillion>=10000) return sign+fmtNum(trillion/10000,2)+"京円";
+  if(trillion<0.01 && trillion!==0) return sign+fmtNum(trillion*10000,1)+"億円";
+  if(trillion<1) return sign+fmtNum(trillion*10000,0)+"億円";
+  return sign+fmtNum(trillion,2)+"兆円";
+}
+function fmtPct(n,d=1){ if(isNaN(n))n=0; return (n>0?"+":"")+n.toFixed(d)+"%"; }
+function deltaClass(n){ return n>0.001?"up":n<-0.001?"down":"flat"; }
+function fmtPrice(p){ return "¥"+fmtNum(Math.round(p),0); }
+function escapeHtml(s){ return (s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),1900);
+}
+
+/* =========================================================================
+   1. DATA SEEDS
+   ========================================================================= */
+const MAJOR_COUNTRIES=[
+ ["日本","🇯🇵",600,1.0,2.5,1.0,2.4,12400,["IT","半導体","自動車","医療","AI"]],
+ ["アメリカ","🇺🇸",2900,2.2,3.0,4.5,4.0,34000,["IT","金融","AI","エネルギー","軍需","宇宙"]],
+ ["中国","🇨🇳",2200,4.5,1.5,3.0,5.2,141000,["製造","半導体","自動車","建設","AI"]],
+ ["韓国","🇰🇷",220,1.8,2.2,3.0,3.0,5200,["半導体","自動車","IT","造船"]],
+ ["台湾","🇹🇼",90,3.0,1.8,1.8,3.4,2400,["半導体","IT","精密機械"]],
+ ["インド","🇮🇳",480,6.5,4.8,6.0,7.5,143000,["IT","製薬","自動車","農業"]],
+ ["イギリス","🇬🇧",380,1.2,3.2,4.75,4.2,6800,["金融","医療","エネルギー","軍需"]],
+ ["ドイツ","🇩🇪",480,0.8,2.8,3.5,5.8,8400,["自動車","製造","エネルギー","化学"]],
+ ["フランス","🇫🇷",340,1.1,2.4,3.5,7.2,6800,["宇宙","エネルギー","金融","ラグジュアリー"]],
+ ["イタリア","🇮🇹",250,0.7,2.1,3.5,7.8,5900,["製造","ラグジュアリー","自動車","観光"]],
+ ["カナダ","🇨🇦",260,1.6,2.6,3.75,5.9,3900,["エネルギー","鉱業","金融","農業"]],
+ ["オーストラリア","🇦🇺",210,2.0,3.0,4.1,4.0,2700,["鉱業","農業","金融","エネルギー"]],
+ ["ブラジル","🇧🇷",250,2.3,4.5,10.5,7.8,21600,["農業","鉱業","エネルギー","製造"]],
+ ["メキシコ","🇲🇽",200,2.5,4.0,9.0,2.8,13000,["自動車","製造","エネルギー","農業"]],
+ ["ロシア","🇷🇺",230,-1.0,7.5,16.0,3.2,14400,["エネルギー","軍需","鉱業"]],
+ ["サウジアラビア","🇸🇦",130,3.5,2.0,5.5,5.6,3600,["エネルギー","金融","建設"]],
+ ["UAE","🇦🇪",70,4.0,2.2,5.0,2.5,1000,["金融","エネルギー","観光","物流"]],
+ ["シンガポール","🇸🇬",65,3.2,2.5,3.5,2.0,600,["金融","IT","物流","バイオ"]],
+];
+const MINOR_COUNTRIES=[
+ ["インドネシア","🇮🇩"],["ベトナム","🇻🇳"],["タイ","🇹🇭"],["ナイジェリア","🇳🇬"],
+ ["エジプト","🇪🇬"],["南アフリカ","🇿🇦"],["アルゼンチン","🇦🇷"],["スペイン","🇪🇸"],
+ ["オランダ","🇳🇱"],["スイス","🇨🇭"],["ポーランド","🇵🇱"],["トルコ","🇹🇷"],
+];
+const MINOR_INDUSTRIES=["製造","農業","観光","金融","エネルギー","物流","建設"];
+const RIVAL_MAP={"アメリカ":"中国","中国":"アメリカ","日本":"中国","韓国":"日本","台湾":"中国","インド":"中国",
+ "イギリス":"ロシア","ドイツ":"ロシア","フランス":"ロシア","ロシア":"アメリカ","サウジアラビア":"UAE","UAE":"サウジアラビア"};
+
+const SECTOR_SUFFIX={
+ "IT":["システムズ","テクノロジーズ","ソフトウェア","デジタル"],
+ "AI":["インテリジェンス","AIラボ","コグニション"],
+ "半導体":["セミコンダクター","チップス","マイクロエレクトロニクス"],
+ "自動車":["モーターズ","オートモーティブ","モビリティ"],
+ "金融":["フィナンシャル","バンク","キャピタル","ホールディングス"],
+ "エネルギー":["エナジー","パワー","リソーシズ"],
+ "医療":["ファーマ","メディカル","ヘルスケア"],
+ "製薬":["ファーマシューティカル","ライフサイエンス"],
+ "農業":["アグリ","フーズ","アグリカルチャー"],
+ "建設":["建設","コンストラクション","エンジニアリング"],
+ "軍需":["ディフェンス","インダストリーズ"],
+ "宇宙":["エアロスペース","スペースワークス"],
+ "鉱業":["マイニング","リソーシズ"],
+ "製造":["インダストリーズ","マニュファクチャリング"],
+ "精密機械":["プレシジョン","メカトロニクス"],
+ "物流":["ロジスティクス","トランスポート"],
+ "観光":["グループ","ホスピタリティ"],
+ "ラグジュアリー":["メゾン","ラグジュアリーHD"],
+ "化学":["ケミカルズ","マテリアルズ"],
+ "造船":["シップビルディング","マリン"],
+ "バイオ":["バイオテック","ゲノミクス"],
+ "小売":["リテール","ストアーズ"],
+ "食品":["フーズ","フードグループ"],
+ "メディア":["メディアHD","ネットワークス","ブロードキャスティング"],
+};
+const GENERIC_SECTORS=["小売","金融","食品","建設","メディア"];
+const ROOTS={
+ "日本":["フジ","サクラ","ヤマト","カガヤキ","スミレ","アズマ","カイ","ミライ"],
+ "アメリカ":["Liberty","Summit","Vertex","Pioneer","Atlas","Horizon","Titan","Apex","Frontier"],
+ "中国":["龍","華夏","盛世","东方","长城","星辰","天元"],
+ "韓国":["한강","서울","동해","금성","해원"],
+ "台湾":["台北","晶元","玉山","福爾摩沙"],
+ "インド":["Ganga","Surya","Himalaya","Bharat","Indus","Lotus"],
+ "イギリス":["Albion","Windsor","Britannia","Sterling","Kensington"],
+ "ドイツ":["Rhein","Adler","Nordstern","Bergwerk","Vorwärts"],
+ "フランス":["Lumière","Provence","Étoile","Marianne","Riviera"],
+ "イタリア":["Vesuvio","Toscana","Aurora","Milano","Vento"],
+ "カナダ":["Maple","Boreal","Arctic","Laurentia"],
+ "オーストラリア":["Outback","Southern Cross","Coral","Eucalyptus"],
+ "ブラジル":["Amazônia","Ipanema","Cerrado","Aurora Verde"],
+ "メキシコ":["Azteca","Sol","Sierra Madre","Pacífico"],
+ "ロシア":["Северный","Уралмаш","Сибирь","Волга"],
+ "サウジアラビア":["Al-Waha","Najd","Hejaz","Sahara"],
+ "UAE":["Falcon","Emirates","Desert Pearl","Al-Noor"],
+ "シンガポール":["Marina","Lion City","Raffles","Orchid"],
+};
+const ROOTS_GENERIC=["Global","Nova","Meridian","Union","Prime","Delta","Orion","Continental"];
+
+const RESOURCES=[
+ {id:'oil',name:'原油',unit:'バレル',base:100,vol:2.6},
+ {id:'gas',name:'天然ガス',unit:'MMBtu',base:60,vol:2.4},
+ {id:'iron',name:'鉄鉱石',unit:'トン',base:50,vol:1.6},
+ {id:'copper',name:'銅',unit:'トン',base:70,vol:1.8},
+ {id:'lithium',name:'リチウム',unit:'トン',base:90,vol:3.2},
+ {id:'gold',name:'金',unit:'オンス',base:120,vol:1.4},
+ {id:'uranium',name:'ウラン',unit:'ポンド',base:80,vol:2.0},
+ {id:'food',name:'食料',unit:'トン',base:40,vol:2.2},
+ {id:'water',name:'水',unit:'㎘',base:20,vol:0.8},
+ {id:'timber',name:'木材',unit:'㎥',base:35,vol:1.5},
+];
+const RESOURCE_SPECIALIZATION={
+ "サウジアラビア":{oil:0.5,gas:0.6},"UAE":{oil:0.55,gas:0.65},"ロシア":{oil:0.6,gas:0.5,timber:0.7},
+ "オーストラリア":{iron:0.5,copper:0.6,gold:0.6,uranium:0.55},"ブラジル":{iron:0.55,food:0.55,timber:0.5},
+ "カナダ":{timber:0.5,uranium:0.6,gold:0.7,water:0.6},"中国":{lithium:0.55,iron:0.7},
+ "南アフリカ":{gold:0.5,uranium:0.6},"インドネシア":{timber:0.5,gas:0.7},"インド":{food:0.7},
+ "アメリカ":{gas:0.75,food:0.7},"アルゼンチン":{food:0.6,lithium:0.6},
+};
+const REAL_ESTATE_TYPES=[
+ {id:'office',name:'オフィス',costMult:1.0,yield:0.055},
+ {id:'retail',name:'商業施設',costMult:0.8,yield:0.065},
+ {id:'residential',name:'住宅',costMult:0.6,yield:0.045},
+ {id:'factory',name:'工場',costMult:1.1,yield:0.07},
+ {id:'datacenter',name:'データセンター',costMult:2.2,yield:0.09},
+ {id:'warehouse',name:'倉庫',costMult:0.7,yield:0.06},
+ {id:'hotel',name:'ホテル',costMult:1.3,yield:0.075},
+];
+const PLANT_TYPES=[
+ {id:'thermal',name:'火力発電所',cost:8,capacity:12,opexRate:0.15,fuel:'oil'},
+ {id:'nuclear',name:'原子力発電所',cost:30,capacity:40,opexRate:0.08,fuel:'uranium'},
+ {id:'solar',name:'太陽光発電所',cost:6,capacity:6,opexRate:0.04,fuel:null},
+ {id:'wind',name:'風力発電所',cost:7,capacity:7,opexRate:0.05,fuel:null},
+ {id:'hydro',name:'水力発電所',cost:12,capacity:10,opexRate:0.03,fuel:null},
+ {id:'battery',name:'蓄電池施設',cost:5,capacity:3,opexRate:0.02,fuel:null},
+];
+const CONTRACT_TITLES=["鉄道建設事業","発電所建設事業","通信網整備事業","港湾開発事業","防災インフラ整備","国家AIシステム構築","衛星システム導入"];
+const FOUND_TIERS=[{key:'small',label:'小規模スタートアップ',cost:0.8},{key:'mid',label:'中規模企業',cost:4},{key:'large',label:'大規模企業',cost:15}];
+const FOUNDABLE_SECTORS=["AI","半導体","自動車","エネルギー","金融","製薬","IT","建設","食品","メディア"];
+
+/* =========================================================================
+   2. GAME STATE
+   ========================================================================= */
+let G=null;
+const SAVE_KEY="wt_save_v2";
+const SAVE_KEY_OLD="wt_save_v1";
+
+function freshState(){
+  return {
+    version:2,
+    startedAt:Date.now(),
+    day:0,
+    playing:false,
+    speed:"week",
+    countries:[],
+    companies:[],
+    resources:[],
+    realEstateListings:[],
+    contracts:[],
+    chainQueue:[],
+    history:[],
+    player:{
+      cash:100,
+      holdings:{}, strategies:{},
+      realEstate:[], plants:[], bank:null, patents:[], resourceHoldings:[],
+      worldPower:0,
+      history:[{day:0,netWorth:100}],
+      recentActions:[],
+      impact:{totalInvested:0,jobsCreated:0,jobsLost:0,crisesTriggered:0,nationsCollapsed:0,nationsSaved:0,companiesFounded:0},
+      milestones:{power:[]},
+    },
+    macro:{ oilPrice:100, globalSentiment:0, globalRate:3.5, bubbleRisk:0, tradeMomentum:0 },
+    crisis:null,
+    news:[], sns:[], voiceLog:{},
+    debug:false,
+    uiCountry:null, uiSector:"all", uiMarketFilter:"all",
+    uiWorldTab:"overview", uiBizTab:"holdings", uiMnaTab:"company", uiChartTf:"day",
+    tutorial:{active:false, step:0, flags:{}, novaId:null, struggleId:null, skipped:false, completed:false, startSnapshot:null},
+  };
+}
+
+function initWorld(){
+  const s=freshState();
+  MAJOR_COUNTRIES.forEach(row=>{
+    const [name,flag,gdp,growth,inflation,rate,unemployment,pop,industries]=row;
+    s.countries.push({
+      id:uid('c'), name, flag, gdp, gdpBase:gdp, gdpGrowth:growth, growthTendency:growth,
+      inflation, inflationTarget:2.0, rate, unemployment, population:pop,
+      industries, major:true,
+      happiness:rand(48,68), govSupport:rand(38,62), unrest:rand(8,28),
+      inequality:rand(28,55), poverty:rand(5,22), approval:50,
+      taxRate:rand(18,32), stability:rand(60,85), tension:rand(5,25),
+      collapsed:false, collapseRemaining:0, conflict:null, infraInvested:0,
+      regulatedUntil:0, _lastShareFlag:0,
+      resourceMod:buildResourceMod(name),
+    });
+  });
+  MINOR_COUNTRIES.forEach(([name,flag])=>{
+    s.countries.push({
+      id:uid('c'), name, flag, gdp:rand(20,150), gdpBase:0, gdpGrowth:rand(-1,5), growthTendency:rand(1,4),
+      inflation:rand(2,8), inflationTarget:3.0, rate:rand(3,12), unemployment:rand(3,12), population:randInt(300,20000),
+      industries:[pick(MINOR_INDUSTRIES),pick(MINOR_INDUSTRIES)], major:false,
+      happiness:rand(40,65), govSupport:rand(35,60), unrest:rand(10,35),
+      inequality:rand(30,60), poverty:rand(10,35), approval:50,
+      taxRate:rand(12,28), stability:rand(45,75), tension:rand(5,30),
+      collapsed:false, collapseRemaining:0, conflict:null, infraInvested:0,
+      regulatedUntil:0, _lastShareFlag:0,
+      resourceMod:buildResourceMod(name),
+    });
+  });
+  s.countries.forEach(c=>{ c.gdpBase=c.gdpBase||c.gdp; c.rivalId=null; });
+  s.countries.forEach(c=>{
+    const rivalName=RIVAL_MAP[c.name];
+    if(rivalName){ const r=s.countries.find(x=>x.name===rivalName); if(r) c.rivalId=r.id; }
+  });
+
+  RESOURCES.forEach(r=>s.resources.push({id:r.id,name:r.name,unit:r.unit,base:r.base,price:r.base,vol:r.vol}));
+
+  s.countries.forEach(country=>{
+    const count=clamp(Math.round(country.gdp/60)+3,3,9);
+    const usedNames=new Set();
+    const roots=ROOTS[country.name]||ROOTS_GENERIC;
+    for(let i=0;i<count;i++){
+      const sector=i===0?pick(country.industries):pick(country.industries.concat(GENERIC_SECTORS));
+      const suffixes=SECTOR_SUFFIX[sector]||["ホールディングス"];
+      let name; let tries=0;
+      do{ name=`${pick(roots)}${pick(suffixes)}`; tries++; }while(usedNames.has(name)&&tries<12);
+      usedNames.add(name);
+      const isFlagship=i===0;
+      const cap = isFlagship
+        ? clamp(country.gdp*rand(0.04,0.09),1.5,320)
+        : clamp(country.gdp*rand(0.002,0.02)+rand(0.1,2.5),0.05,80);
+      const shares=1e9;
+      const price=(cap*1e12)/shares;
+      s.companies.push({
+        id:uid('co'), name, country:country.id, countryName:country.name, flag:country.flag,
+        sector, marketCap:cap, price, shares,
+        revenue:cap*rand(0.3,0.9), profit:cap*rand(-0.02,0.16),
+        employees:Math.round(cap*rand(900,3200)),
+        debt:cap*rand(0.1,0.6), cashRes:cap*rand(0.05,0.3),
+        brand:rand(20,95), tech:rand(20,95),
+        growth:rand(-1.5,7)+ (isFlagship?1:0), volatility:rand(0.7,3.2),
+        prevCap:cap, bankrupt:false, founder:false, patented:false,
+        candles:[], _todayVolumeShares:0,
+      });
+    }
+  });
+
+  s.countries.filter(c=>c.major).forEach(country=>{
+    for(let i=0;i<2;i++){
+      s.realEstateListings.push(makeListing(country));
+    }
+  });
+
+  return s;
+}
+function buildResourceMod(countryName){
+  const spec=RESOURCE_SPECIALIZATION[countryName]||{};
+  const mod={};
+  RESOURCES.forEach(r=>{ mod[r.id]= spec[r.id]!==undefined ? spec[r.id] : rand(0.85,1.2); });
+  return mod;
+}
+function makeListing(country){
+  const type=pick(REAL_ESTATE_TYPES);
+  const price=clamp(country.gdp*rand(0.0006,0.003)*type.costMult,0.05,60);
+  const rent=price*type.yield/12;
+  return {id:uid('re'), countryId:country.id, countryName:country.name, flag:country.flag,
+    type:type.id, typeName:type.name, price, rent, occupancy:rand(0.6,0.97),
+    maintenance:rent*rand(0.1,0.3), landValue:price};
+}
+
+/* ---- migration for older saves ---- */
+function migrateState(s){
+  s.version=2;
+  s.resources=s.resources&&s.resources.length? s.resources : RESOURCES.map(r=>({id:r.id,name:r.name,unit:r.unit,base:r.base,price:r.base,vol:r.vol}));
+  s.realEstateListings=s.realEstateListings||[];
+  s.contracts=s.contracts||[];
+  s.chainQueue=s.chainQueue||[];
+  s.history=s.history||[];
+  s.uiWorldTab=s.uiWorldTab||"overview"; s.uiBizTab=s.uiBizTab||"holdings"; s.uiMnaTab=s.uiMnaTab||"company"; s.uiChartTf=s.uiChartTf||"day";
+  const p=s.player;
+  p.realEstate=p.realEstate||[]; p.plants=p.plants||[]; p.bank=p.bank||null; p.patents=p.patents||[]; p.resourceHoldings=p.resourceHoldings||[];
+  p.impact=p.impact||{totalInvested:0,jobsCreated:0,jobsLost:0,crisesTriggered:0,nationsCollapsed:0,nationsSaved:0,companiesFounded:0};
+  p.milestones=p.milestones||{power:[]};
+  p.recentActions=p.recentActions||[];
+  // migrate holdings from old plain-number format {coId:number} to {coId:{shares,costBasis}}
+  Object.keys(p.holdings||{}).forEach(coId=>{
+    const v=p.holdings[coId];
+    if(typeof v==='number'){
+      const co=s.companies.find(c=>c.id===coId);
+      const price=co?co.price:0;
+      p.holdings[coId]={shares:v, costBasis:(v*price)/1e12};
+    } else if(v && typeof v==='object'){
+      if(v.shares===undefined) v.shares=0;
+      if(v.costBasis===undefined) v.costBasis=(v.shares*(s.companies.find(c=>c.id===coId)?.price||0))/1e12;
+    }
+  });
+  s.tutorial=s.tutorial||{active:false,step:0,flags:{},novaId:null,struggleId:null,skipped:false,completed:false,startSnapshot:null};
+  s.countries.forEach(c=>{
+    if(c.stability===undefined) c.stability=clamp(100-(c.unrest||20)*0.6-(c.poverty||15)*0.3,10,90);
+    if(c.tension===undefined) c.tension=rand(5,25);
+    if(c.collapsed===undefined) c.collapsed=false;
+    if(c.collapseRemaining===undefined) c.collapseRemaining=0;
+    if(c.conflict===undefined) c.conflict=null;
+    if(c.infraInvested===undefined) c.infraInvested=0;
+    if(c.regulatedUntil===undefined) c.regulatedUntil=0;
+    if(c._lastShareFlag===undefined) c._lastShareFlag=0;
+    if(!c.resourceMod) c.resourceMod=buildResourceMod(c.name);
+    if(c.rivalId===undefined){ const rn=RIVAL_MAP[c.name]; const r=rn?s.countries.find(x=>x.name===rn):null; c.rivalId=r?r.id:null; }
+  });
+  s.companies.forEach(co=>{
+    if(!co.candles) co.candles=[];
+    if(co._todayVolumeShares===undefined) co._todayVolumeShares=0;
+    if(co.founder===undefined) co.founder=false;
+    if(co.patented===undefined) co.patented=false;
+  });
+  if(s.realEstateListings.length===0){
+    s.countries.filter(c=>c.major).forEach(country=>{ for(let i=0;i<2;i++) s.realEstateListings.push(makeListing(country)); });
+  }
+  return s;
+}
+
+function hShares(coId){ const h=G.player.holdings[coId]; return h?(h.shares||0):0; }
+function hCostBasis(coId){ const h=G.player.holdings[coId]; return h?(h.costBasis||0):0; }
+function addHolding(coId, shares, cost){
+  const h=G.player.holdings[coId]||{shares:0,costBasis:0};
+  h.shares+=shares; h.costBasis+=cost;
+  G.player.holdings[coId]=h;
+}
+function reduceHolding(coId, shares){
+  const h=G.player.holdings[coId]; if(!h||h.shares<=0) return 0;
+  const origShares=h.shares;
+  const portion=clamp(shares/origShares,0,1);
+  const removedCost=h.costBasis*portion;
+  h.shares=Math.max(0,h.shares-shares);
+  h.costBasis=Math.max(0,h.costBasis-removedCost);
+  if(h.shares<=0){ h.shares=0; h.costBasis=0; }
+  return removedCost;
+}
+
+function recalcWorldPower(){
+  const p=G.player;
+  let controlled=0, ownedValue=0, countriesTouched=new Set();
+  G.companies.forEach(co=>{
+    const sh=hShares(co.id);
+    if(sh>0){
+      const val=sh*co.price/1e12;
+      ownedValue+=val;
+      countriesTouched.add(co.country);
+      const pct=sh/co.shares;
+      if(pct>=0.5) controlled+=val;
+    }
+  });
+  const totalMarket = G.companies.reduce((a,c)=>a+c.marketCap,0);
+  const otherAssets = (p.realEstate.reduce((a,r)=>a+r.landValue,0)) + (p.plants.reduce((a,pl)=>a+pl.cost,0)) + (p.bank?p.bank.capital:0);
+  const finInfluence = clamp((ownedValue/Math.max(totalMarket,1))*400,0,100);
+  const corpInfluence = clamp((controlled/Math.max(totalMarket,1))*600,0,100);
+  const polInfluence = clamp(countriesTouched.size*3.2 + G.countries.filter(c=>(c.infraInvested||0)>0).length*3,0,100);
+  const techInfluence = clamp(G.companies.filter(c=>hShares(c.id)>0 && (c.sector==="AI"||c.sector==="半導体"||c.sector==="IT")).length*6 + p.patents.length*8,0,100);
+  const infoInfluence = clamp((p.recentActions.length)*4 + G.companies.filter(c=>c.sector==="メディア"&&hShares(c.id)>0).length*10,0,100);
+  const resInfluence = clamp(G.companies.filter(c=>hShares(c.id)>0 && (c.sector==="エネルギー"||c.sector==="鉱業")).length*7 + p.plants.length*6 + p.resourceHoldings.length*3,0,100);
+  const power = (finInfluence*0.26+corpInfluence*0.26+polInfluence*0.16+techInfluence*0.12+infoInfluence*0.08+resInfluence*0.12);
+  p.worldPower=Math.round(power);
+  p._powerBreakdown={finInfluence,corpInfluence,polInfluence,techInfluence,infoInfluence,resInfluence};
+  [25,50,75,90].forEach(t=>{
+    if(p.worldPower>=t && !p.milestones.power.includes(t)){
+      p.milestones.power.push(t);
+      addHistory(`GLOBAL CAPITALのWORLD POWERが${t}に到達した。`);
+    }
+  });
+  return p.worldPower;
+}
+
+function netWorth(){
+  const p=G.player;
+  let v=p.cash;
+  G.companies.forEach(co=>{ const sh=hShares(co.id); if(sh>0) v+=sh*co.price/1e12; });
+  p.realEstate.forEach(r=>v+=r.landValue);
+  p.plants.forEach(pl=>v+=pl.cost*0.85);
+  p.resourceHoldings.forEach(h=>{ const r=G.resources.find(x=>x.id===h.resource); if(r) v+=(h.units*r.price)/1e6; });
+  if(p.bank) v+=p.bank.capital;
+  p.patents.forEach(pt=>v+=pt.value);
+  return v;
+}
+
+function ownershipPct(co){ return (hShares(co.id)/co.shares)*100; }
+
+/* =========================================================================
+   3. PERSISTENCE
+   ========================================================================= */
+async function saveGame(){
+  try{ await window.storage.set(SAVE_KEY, JSON.stringify(G), false); }
+  catch(e){ console.error('save failed',e); }
+}
+async function loadGame(){
+  try{
+    const r=await window.storage.get(SAVE_KEY, false);
+    if(r && r.value){ G=migrateState(JSON.parse(r.value)); return true; }
+  }catch(e){ /* try old key */ }
+  try{
+    const r2=await window.storage.get(SAVE_KEY_OLD, false);
+    if(r2 && r2.value){ G=migrateState(JSON.parse(r2.value)); return true; }
+  }catch(e){ /* no save yet */ }
+  return false;
+}
+async function resetGame(){
+  try{ await window.storage.delete(SAVE_KEY, false); }catch(e){}
+  G=initWorld();
+  recalcWorldPower();
+  saveGame();
+  renderAll();
+  toast("ゲームをリセットしました");
+}
+
+/* =========================================================================
+   4. EVENT CHAIN ENGINE
+   ========================================================================= */
+function scheduleChain(day,type,payload){
+  G.chainQueue.push(Object.assign({id:uid('ch'),day,type},payload));
+}
+function processChainQueue(){
+  if(!G.chainQueue.length) return;
+  const due=G.chainQueue.filter(c=>c.day<=G.day);
+  if(!due.length) return;
+  due.forEach(applyChainEffect);
+  G.chainQueue=G.chainQueue.filter(c=>c.day>G.day);
+}
+function applyChainEffect(item){
+  switch(item.type){
+    case 'oil_up':
+      G.macro.oilPrice=clamp(G.macro.oilPrice+item.delta,20,400);
+      if(item.head) pushNews(item.head,item.body,'world',false);
+      break;
+    case 'inflation_up':
+      G.countries.forEach(c=>{ if(!c.collapsed) c.inflation=clamp(c.inflation+item.delta,-2,60); });
+      if(item.head) pushNews(item.head,item.body,'world',false);
+      break;
+    case 'sentiment_down':
+      G.macro.globalSentiment=clamp(G.macro.globalSentiment-item.delta,-100,100);
+      if(item.head) pushNews(item.head,item.body,'market',false);
+      break;
+    case 'sentiment_up':
+      G.macro.globalSentiment=clamp(G.macro.globalSentiment+item.delta,-100,100);
+      if(item.head) pushNews(item.head,item.body,'market',false);
+      break;
+    case 'unemployment_up':
+      G.countries.forEach(c=>{ if(!c.collapsed) c.unemployment=clamp(c.unemployment+item.delta,0.5,50); });
+      if(item.head) pushNews(item.head,item.body,'world',false);
+      break;
+    case 'unrest_up':
+      G.countries.forEach(c=>{ if(!c.collapsed){ c.unrest=clamp(c.unrest+item.delta,0,100); c.govSupport=clamp(c.govSupport-item.delta,0,100);} });
+      if(item.head) pushNews(item.head,item.body,'world',false);
+      break;
+    case 'regulation_start':{
+      const c=G.countries.find(x=>x.id===item.countryId);
+      if(c) c.regulatedUntil=G.day+60;
+      if(item.head) pushNews(item.head,item.body,'mna',true);
+      break;
+    }
+    case 'infra_boost':{
+      const c=G.countries.find(x=>x.id===item.countryId);
+      if(c && !c.collapsed){
+        c.happiness=clamp(c.happiness+item.delta,0,100);
+        c.growthTendency=clamp(c.growthTendency+item.delta2,-5,12);
+        c.unemployment=clamp(c.unemployment-item.delta3,0.5,50);
+        c.govSupport=clamp(c.govSupport+item.delta4,0,100);
+      }
+      if(item.head) pushNews(item.head,item.body,'world',false);
+      break;
+    }
+    case 'tension_up':{
+      const c=G.countries.find(x=>x.id===item.countryId);
+      if(c) c.tension=clamp((c.tension||0)+item.delta,0,100);
+      if(item.head) pushNews(item.head,item.body,'world',false);
+      break;
+    }
+    case 'crisis_boost':
+      G.macro.bubbleRisk=clamp(G.macro.bubbleRisk+item.delta,0,100);
+      break;
+    case 'news_only':
+      pushNews(item.head,item.body,item.tag||'world',!!item.breaking);
+      break;
+  }
+}
+function scheduleOilChain(){
+  scheduleChain(G.day+8,'oil_up',{delta:rand(8,18),head:"原油高騰",body:"大口の買い需要を背景に原油価格が急騰し、エネルギーコストへの懸念が広がっている。"});
+  scheduleChain(G.day+16,'inflation_up',{delta:rand(0.4,0.9),head:"物価上昇圧力",body:"輸送・原材料コストの上昇を受け、世界的に物価上昇圧力が強まっている。"});
+  scheduleChain(G.day+26,'sentiment_down',{delta:rand(8,18),head:"金融引き締め観測",body:"インフレ加速を受け各国中央銀行が利上げに動くとの観測から、株式市場に売りが出ている。"});
+  scheduleChain(G.day+36,'unemployment_up',{delta:rand(0.3,0.7),head:"景気減速の兆し",body:"企業コスト増加が投資抑制につながり、雇用情勢に陰りが見え始めている。"});
+  scheduleChain(G.day+46,'unrest_up',{delta:rand(3,7),head:"国民の不満拡大",body:"物価高と雇用不安を背景に、各国で政府への不満が高まっている。"});
+}
+function checkMonopolyAndTrigger(country){
+  if(!country) return;
+  const compsInCountry=G.companies.filter(c=>c.country===country.id);
+  const totalCap=compsInCountry.reduce((a,c)=>a+c.marketCap,0);
+  const ownedCap=compsInCountry.reduce((a,c)=>a+(hShares(c.id)/c.shares)*c.marketCap,0);
+  const share=totalCap>0?ownedCap/totalCap:0;
+  const thresholds=[0.25,0.4,0.6];
+  thresholds.forEach(t=>{
+    if(share>=t && country._lastShareFlag<t){
+      country._lastShareFlag=t;
+      scheduleChain(G.day+10,'news_only',{head:"独占懸念",tag:'world',body:`${country.flag}${country.name}でGLOBAL CAPITALの市場支配力が${Math.round(t*100)}%を突破。規制当局が調査を検討していると報じられた。`});
+      scheduleChain(G.day+20,'regulation_start',{countryId:country.id,head:"買収規制",body:`${country.flag}${country.name}政府がGLOBAL CAPITALに対する買収規制の導入を発表した。以後、この国での買収コストが上昇する。`});
+    }
+  });
+}
+function checkCountryConcentration(country, amount){
+  if(!country) return;
+  country._recentInvest=(country._recentInvest||0)+amount;
+  const ratio=country._recentInvest/Math.max(country.gdp,1);
+  if(ratio>0.05 && !country._tensionFlagged){
+    country._tensionFlagged=true;
+    country.tension=clamp((country.tension||0)+10,0,100);
+    const rival=G.countries.find(c=>c.id===country.rivalId);
+    if(rival){
+      rival.tension=clamp((rival.tension||0)+6,0,100);
+      scheduleChain(G.day+15,'news_only',{head:"外交摩擦",tag:'world',body:`GLOBAL CAPITALによる${country.flag}${country.name}への集中投資を受け、${rival.flag}${rival.name}が警戒感を強め、関税措置を検討していると報じられた。`});
+    }
+  }
+}
+
+/* =========================================================================
+   5. NATIONAL STABILITY / COLLAPSE / CONFLICT
+   ========================================================================= */
+const CONFLICT_NAMES=["国境紛争","内戦の激化","政治対立の激化","大規模な反政府デモ"];
+function triggerCollapse(country){
+  country.collapsed=true; country.collapseRemaining=randInt(60,150); country.stability=8; country.conflict=null;
+  G.companies.filter(co=>co.country===country.id).forEach(co=>{
+    co.marketCap=Math.max(0.01, co.marketCap*rand(0.25,0.5));
+    co.price=(co.marketCap*1e12)/co.shares;
+    co.growth=-8;
+  });
+  country.gdpGrowth=-12; country.growthTendency=-6;
+  country.unemployment=clamp(country.unemployment+15,0,60);
+  country.happiness=clamp(country.happiness-25,0,100);
+  const candidates=G.countries.filter(c=>c.id!==country.id && !c.collapsed && c.stability>50);
+  const dest=candidates.length?pick(candidates):pick(G.countries.filter(c=>c.id!==country.id));
+  const moved=Math.round(country.population*rand(0.03,0.08));
+  country.population=Math.max(100,country.population-moved);
+  if(dest){ dest.population+=moved; dest.growthTendency=clamp(dest.growthTendency+0.4,-5,12); dest.unemployment=clamp(dest.unemployment+1,0,60); }
+  pushNews("国家崩壊",`${country.flag}${country.name}で政府機能が停止し、国家崩壊状態に陥った。株式市場は事実上停止し、多数の国民が${dest?dest.name:'周辺国'}へ移動している。`,"world",true);
+  addHistory(`${country.flag}${country.name}が崩壊した。`);
+  G.player.impact.nationsCollapsed++;
+}
+function triggerConflict(country){
+  country.conflict={name:pick(CONFLICT_NAMES),remaining:randInt(30,80)};
+  country.growthTendency=clamp(country.growthTendency-2.5,-5,12);
+  country.happiness=clamp(country.happiness-10,0,100);
+  pushNews("政情不安",`${country.flag}${country.name}で${country.conflict.name}が発生した。経済活動への影響が懸念されている。`,"world",true);
+}
+function updateCountryStability(c, days){
+  if(c.collapsed){
+    c.collapseRemaining-=days;
+    if(c.collapseRemaining<=0){
+      c.collapsed=false; c.stability=35; c.unrest=clamp(c.unrest-30,0,100);
+      c.growthTendency=rand(1,3); c.gdpGrowth=rand(0.5,2);
+      pushNews("復興",`${c.flag}${c.name}で新政府が樹立され、復興が始まった。`,"world",true);
+      addHistory(`${c.flag}${c.name}で新政府が樹立され、復興が始まった。`);
+      if((c.infraInvested||0)>0) G.player.impact.nationsSaved++;
+    }
+    return;
+  }
+  const target = 100 - c.unrest*0.6 - c.poverty*0.25 - clamp(c.inflation-8,0,40)*1.2 - clamp(30-c.govSupport,0,30) - ((c.tension||0)>70?15:0);
+  c.stability=clamp(c.stability + (clamp(target,0,100)-c.stability)*0.06*(days/7) + normRand()*0.3*(days/7),0,100);
+  if(c.conflict){
+    c.conflict.remaining-=days;
+    if(c.conflict.remaining<=0){
+      pushNews("紛争終結",`${c.flag}${c.name}の${c.conflict.name}は沈静化に向かっている。`,"world");
+      c.conflict=null;
+    } else if(c.stability<15 && Math.random()<0.02*(days/7)){
+      triggerCollapse(c); return;
+    }
+    return;
+  }
+  if(c.stability<20 && Math.random()<0.02*(days/7)){ triggerCollapse(c); }
+  else if(c.stability<40 && c.unrest>55 && Math.random()<0.015*(days/7)){ triggerConflict(c); }
+}
+
+/* =========================================================================
+   6. CRISIS SYSTEM (global)
+   ========================================================================= */
+const CRISIS_POOL=[
+ {name:"世界金融危機", tag:"finance", desc:"信用収縮が連鎖し、世界中の株式市場が急落している。", sentiment:-45, oil:-10, dur:[20,40]},
+ {name:"エネルギー危機", tag:"energy", desc:"供給不安から原油・エネルギー価格が急騰している。", sentiment:-15, oil:60, dur:[15,30]},
+ {name:"半導体不足", tag:"tech", desc:"半導体サプライチェーンが逼迫し、製造業に打撃。", sentiment:-10, oil:0, dur:[15,25], sectorHit:"半導体"},
+ {name:"AIバブル懸念", tag:"tech", desc:"AI関連銘柄への過熱投資に警戒感が広がっている。", sentiment:-8, oil:0, dur:[10,20], sectorHit:"AI"},
+ {name:"世界的インフレ", tag:"inflation", desc:"物価上昇が世界的に加速し、各国中銀が対応を迫られている。", sentiment:-12, oil:15, dur:[20,35]},
+ {name:"通貨危機", tag:"currency", desc:"新興国通貨が急落し、資本流出が懸念されている。", sentiment:-20, oil:0, dur:[10,25]},
+ {name:"不動産バブル崩壊", tag:"finance", desc:"不動産価格の急落が金融システムに波及している。", sentiment:-25, oil:-5, dur:[15,30]},
+ {name:"大規模パンデミック警戒", tag:"health", desc:"新たな感染症の拡大により経済活動に懸念が広がる。", sentiment:-30, oil:-20, dur:[20,40]},
+ {name:"食料危機", tag:"food", desc:"異常気象と物流混乱により食料価格が急騰している。", sentiment:-14, oil:5, dur:[15,30]},
+ {name:"技術革命の到来", tag:"tech", desc:"画期的な技術革新が生産性向上への期待を高めている。", sentiment:22, oil:0, dur:[10,20]},
+ {name:"世界的な需要回復", tag:"growth", desc:"消費と投資が力強く回復し、楽観的な見方が広がっている。", sentiment:18, oil:5, dur:[10,20]},
+];
+function maybeTriggerCrisis(days){
+  if(G.crisis){
+    G.crisis.remaining-=days;
+    if(G.crisis.remaining<=0){
+      pushNews("危機の終息", `${G.crisis.name}の影響は徐々に和らぎ、市場は落ち着きを取り戻しつつある。`, "world");
+      G.crisis=null;
+    }
+    return;
+  }
+  const bubbleBoost = G.macro.bubbleRisk>60 ? 0.02 : 0;
+  const p = 0.0018*days + bubbleBoost;
+  if(Math.random()<p){
+    const c=pick(CRISIS_POOL);
+    G.crisis={name:c.name, desc:c.desc, tag:c.tag, sectorHit:c.sectorHit, remaining:randInt(c.dur[0],c.dur[1])};
+    G.macro.globalSentiment=clamp(G.macro.globalSentiment+c.sentiment,-100,100);
+    G.macro.oilPrice=clamp(G.macro.oilPrice+c.oil,20,300);
+    G.macro.bubbleRisk=Math.max(0,G.macro.bubbleRisk-30);
+    pushNews("BREAKING", `${c.name}が発生。${c.desc}`, "world", true);
+    pushSNS(`速報：${c.name}。市場が騒然としている。`, "🌐","market_watch");
+    G.player.impact.crisesTriggered++;
+    addHistory(`世界で${c.name}が発生した。`);
+  }
+}
+
+/* =========================================================================
+   7. RESOURCES / REAL ESTATE / ENERGY / BANK / PATENTS / FOUNDING
+   ========================================================================= */
+function resourceLocalPrice(resource, country){ return resource.price * ((country.resourceMod&&country.resourceMod[resource.id])||1); }
+
+function buyResource(resourceId, countryId, amountTrillion){
+  const resource=G.resources.find(r=>r.id===resourceId);
+  const country=G.countries.find(c=>c.id===countryId);
+  if(!resource||!country) return {ok:false,msg:"データが見つかりません"};
+  if(amountTrillion<=0) return {ok:false,msg:"金額を入力してください"};
+  if(amountTrillion>G.player.cash) return {ok:false,msg:"資金が不足しています"};
+  const localPrice=resourceLocalPrice(resource,country);
+  const units=(amountTrillion*1e6)/localPrice;
+  G.player.cash-=amountTrillion;
+  G.player.resourceHoldings.push({id:uid('rh'),resource:resourceId,units,boughtCountry:countryId,boughtCountryName:country.name,boughtPrice:localPrice,boughtDay:G.day,investedAmount:amountTrillion});
+  G.player.impact.totalInvested+=amountTrillion;
+  G.player.recentActions.push({type:'resource_buy',resource:resourceId,amount:amountTrillion});
+  if(resourceId==='oil' && amountTrillion>6) scheduleOilChain();
+  pushNews("資源市場",`GLOBAL CAPITALが${country.flag}${country.name}で${resource.name}を${fmtYen(amountTrillion)}分取得した。`,"market");
+  saveGame();
+  return {ok:true};
+}
+function sellResourceHolding(holdingId, sellCountryId){
+  const h=G.player.resourceHoldings.find(x=>x.id===holdingId);
+  if(!h) return {ok:false,msg:"保有ポジションが見つかりません"};
+  const resource=G.resources.find(r=>r.id===h.resource);
+  const sellCountry=G.countries.find(c=>c.id===sellCountryId);
+  if(!resource||!sellCountry) return {ok:false,msg:"データが見つかりません"};
+  const sellLocal=resourceLocalPrice(resource,sellCountry);
+  const transportCost = sellCountryId===h.boughtCountry?0.02:0.06;
+  const revenue = (h.units*sellLocal/1e6)*(1-transportCost);
+  G.player.cash+=revenue;
+  G.player.resourceHoldings=G.player.resourceHoldings.filter(x=>x.id!==holdingId);
+  const profit=revenue-h.investedAmount;
+  pushNews("資源取引",`GLOBAL CAPITALが${resource.name}のポジションを${sellCountry.flag}${sellCountry.name}で決済し、${fmtYen(revenue)}を得た（${profit>=0?'利益':'損失'} ${fmtYen(Math.abs(profit))}）。`,"market");
+  saveGame();
+  return {ok:true, revenue};
+}
+
+function buyRealEstate(listingId){
+  const idx=G.realEstateListings.findIndex(l=>l.id===listingId);
+  if(idx<0) return {ok:false,msg:"物件が見つかりません"};
+  const listing=G.realEstateListings[idx];
+  if(listing.price>G.player.cash) return {ok:false,msg:"資金が不足しています"};
+  G.player.cash-=listing.price;
+  G.player.realEstate.push(Object.assign({},listing,{purchasedDay:G.day}));
+  G.realEstateListings.splice(idx,1);
+  G.player.impact.totalInvested+=listing.price;
+  if(!G.player.milestones.realEstate){ G.player.milestones.realEstate=true; addHistory(`GLOBAL CAPITALが初めて不動産（${listing.countryName}の${listing.typeName}）を取得した。`); }
+  pushNews("不動産取得",`GLOBAL CAPITALが${listing.flag}${listing.countryName}の${listing.typeName}を${fmtYen(listing.price)}で取得した。`,"world");
+  saveGame();
+  return {ok:true};
+}
+function sellRealEstate(propId){
+  const idx=G.player.realEstate.findIndex(r=>r.id===propId);
+  if(idx<0) return {ok:false,msg:"物件が見つかりません"};
+  const prop=G.player.realEstate[idx];
+  const proceeds=prop.landValue*0.92;
+  G.player.cash+=proceeds;
+  G.player.realEstate.splice(idx,1);
+  pushNews("不動産売却",`GLOBAL CAPITALが${prop.flag}${prop.countryName}の${prop.typeName}を売却し、${fmtYen(proceeds)}を得た。`,"world");
+  saveGame();
+  return {ok:true};
+}
+
+function buildPlant(countryId, typeId){
+  const type=PLANT_TYPES.find(t=>t.id===typeId);
+  const country=G.countries.find(c=>c.id===countryId);
+  if(!type||!country) return {ok:false,msg:"データが見つかりません"};
+  if(type.cost>G.player.cash) return {ok:false,msg:"資金が不足しています"};
+  G.player.cash-=type.cost;
+  G.player.plants.push({id:uid('pl'),type:type.id,typeName:type.name,countryId,countryName:country.name,flag:country.flag,
+    capacity:type.capacity,cost:type.cost,opexRate:type.opexRate,fuel:type.fuel,builtDay:G.day});
+  G.player.impact.totalInvested+=type.cost;
+  pushNews("発電所建設",`GLOBAL CAPITALが${country.flag}${country.name}に${type.name}を建設した。`,"world");
+  saveGame();
+  return {ok:true};
+}
+function plantMonthlyNet(pl){
+  const energyPrice=50*(G.macro.oilPrice/100)*0.5+25 + (G.crisis&&G.crisis.tag==='energy'?18:0);
+  const revenue=pl.capacity*0.05*(energyPrice/50);
+  const opex=pl.cost*pl.opexRate/12;
+  let fuelCost=0;
+  if(pl.fuel){ const r=G.resources.find(x=>x.id===pl.fuel); if(r) fuelCost=pl.capacity*0.01*(r.price/100); }
+  return revenue-opex-fuelCost;
+}
+
+function foundBank(){
+  if(G.player.bank) return {ok:false,msg:"既に銀行を保有しています"};
+  const cost=15;
+  if(cost>G.player.cash) return {ok:false,msg:"資金が不足しています（必要15兆円）"};
+  G.player.cash-=cost;
+  G.player.bank={capital:cost,founded:G.day};
+  G.player.impact.totalInvested+=cost;
+  if(!G.player.milestones.bank){ G.player.milestones.bank=true; addHistory("GLOBAL CAPITALが銀行を設立した。"); }
+  pushNews("銀行設立",`GLOBAL CAPITALが銀行子会社を設立した。融資事業による利息収入が見込まれる。`,"world");
+  saveGame();
+  return {ok:true};
+}
+function addBankCapital(amount){
+  if(!G.player.bank) return {ok:false,msg:"銀行を保有していません"};
+  if(amount<=0||amount>G.player.cash) return {ok:false,msg:"資金が不足しています"};
+  G.player.cash-=amount; G.player.bank.capital+=amount;
+  G.player.impact.totalInvested+=amount;
+  toast("銀行に増資しました");
+  saveGame();
+  return {ok:true};
+}
+
+function filePatent(coId){
+  const co=G.companies.find(c=>c.id===coId);
+  if(!co) return {ok:false,msg:"企業が見つかりません"};
+  if(co.tech<80) return {ok:false,msg:"技術力80以上の企業が必要です"};
+  if(co.patented) return {ok:false,msg:"既に特許化されています"};
+  const fee=1;
+  if(fee>G.player.cash) return {ok:false,msg:"資金が不足しています"};
+  G.player.cash-=fee;
+  co.patented=true;
+  const annualIncome=co.tech*0.05;
+  G.player.patents.push({id:uid('pt'),name:`${co.name} 特許ポートフォリオ`,field:co.sector,fromCo:co.id,value:annualIncome*4,annualIncome});
+  G.player.impact.totalInvested+=fee;
+  if(!G.player.milestones.patent){ G.player.milestones.patent=true; addHistory(`GLOBAL CAPITALが初めて特許を取得した（${co.name}）。`); }
+  pushNews("特許取得",`GLOBAL CAPITALが${co.name}の技術を特許化し、他社へのライセンス供与を開始した。年間${fmtYen(annualIncome)}の収入が見込まれる。`,"world");
+  saveGame();
+  return {ok:true};
+}
+
+function foundCompany(countryId, sector, tierKey){
+  const country=G.countries.find(c=>c.id===countryId);
+  const tier=FOUND_TIERS.find(t=>t.key===tierKey);
+  if(!country||!tier) return {ok:false,msg:"データが見つかりません"};
+  if(tier.cost>G.player.cash) return {ok:false,msg:"資金が不足しています"};
+  G.player.cash-=tier.cost;
+  const roots=ROOTS[country.name]||ROOTS_GENERIC;
+  const suffixes=SECTOR_SUFFIX[sector]||["ホールディングス"];
+  const name=`${pick(roots)}${pick(suffixes)}`;
+  const marketCap=tier.cost*rand(1.1,1.5);
+  const shares=1e9;
+  const price=(marketCap*1e12)/shares;
+  const co={id:uid('co'), name, country:country.id, countryName:country.name, flag:country.flag,
+    sector, marketCap, price, shares,
+    revenue:marketCap*rand(0.15,0.4), profit:marketCap*rand(-0.05,0.05),
+    employees:Math.round(marketCap*rand(600,1500)),
+    debt:marketCap*rand(0.05,0.2), cashRes:marketCap*rand(0.1,0.3),
+    brand:rand(10,30), tech:rand(25,60),
+    growth:rand(3,12), volatility:rand(1.8,4.5),
+    prevCap:marketCap, bankrupt:false, founder:true, patented:false,
+    candles:[], _todayVolumeShares:0,
+  };
+  G.companies.push(co);
+  G.player.holdings[co.id]={shares,costBasis:tier.cost};
+  G.player.impact.totalInvested+=tier.cost;
+  G.player.impact.companiesFounded++;
+  if(!G.player.milestones.founded){ G.player.milestones.founded=true; addHistory(`GLOBAL CAPITALが初めて自社企業「${name}」を設立した。`); }
+  pushNews("企業設立",`GLOBAL CAPITALが${country.flag}${country.name}に${sector}企業「${name}」を設立した。`,"mna",true);
+  recalcWorldPower();
+  saveGame();
+  return {ok:true, coId:co.id};
+}
+
+/* =========================================================================
+   8. NATIONAL INVESTMENT / GOVERNMENT CONTRACTS
+   ========================================================================= */
+function investInfrastructure(countryId, amount){
+  const c=G.countries.find(x=>x.id===countryId);
+  if(!c) return {ok:false,msg:"国が見つかりません"};
+  if(amount<=0) return {ok:false,msg:"金額を入力してください"};
+  if(amount>G.player.cash) return {ok:false,msg:"資金が不足しています"};
+  const wasUnstable=c.stability<45;
+  G.player.cash-=amount;
+  c.infraInvested=(c.infraInvested||0)+amount;
+  G.player.impact.totalInvested+=amount;
+  if(wasUnstable) G.player.impact.nationsSaved++;
+  pushNews("国家投資",`GLOBAL CAPITALが${c.flag}${c.name}のインフラ整備に${fmtYen(amount)}を投資すると発表した。`, 'world', true);
+  const strength=clamp(amount/Math.max(c.gdp,1)*100,0.5,8);
+  scheduleChain(G.day+10,'news_only',{head:"物流改善",tag:'world',body:`${c.name}で道路・港湾インフラの改善が進み、物流効率が向上している。`});
+  scheduleChain(G.day+20,'infra_boost',{countryId:c.id,delta:strength*0.4,delta2:strength*0.15,delta3:strength*0.3,delta4:strength*0.3,head:"企業コスト低下",body:`${c.name}で企業の物流・operatingコストが低下し、利益率が改善している。`});
+  scheduleChain(G.day+34,'news_only',{head:"雇用拡大",tag:'world',body:`${c.name}でインフラ関連の雇用が拡大し、失業率に改善の兆しが見られる。`});
+  scheduleChain(G.day+45,'news_only',{head:"国民生活の改善",tag:'world',body:`${c.name}の国民の間で生活実感の改善を感じる声が増えている。`});
+  saveGame();
+  return {ok:true};
+}
+function maybeSpawnContract(){
+  if(G.contracts.filter(c=>c.status==='open').length>=6) return;
+  if(Math.random()<0.02){
+    const pool=G.countries.filter(x=>!x.collapsed);
+    if(!pool.length) return;
+    const c=pick(pool);
+    const title=pick(CONTRACT_TITLES);
+    const cost=clamp(c.gdp*rand(0.008,0.035),0.5,60);
+    const reward=cost*rand(1.4,2.3);
+    const successChance=clamp(0.5+(G.player.worldPower/220)+((c.stability||60)-50)/220,0.2,0.95);
+    G.contracts.push({id:uid('ct'),countryId:c.id,countryName:c.name,flag:c.flag,title,cost,reward,successChance,status:'open',spawnDay:G.day,deadlineDay:G.day+randInt(20,45),resolveDay:null});
+  }
+}
+function acceptContract(id){
+  const ct=G.contracts.find(c=>c.id===id);
+  if(!ct||ct.status!=='open') return {ok:false,msg:"案件が見つかりません"};
+  if(ct.cost>G.player.cash) return {ok:false,msg:"資金が不足しています"};
+  G.player.cash-=ct.cost;
+  ct.status='active';
+  ct.resolveDay=G.day+randInt(15,40);
+  G.player.impact.totalInvested+=ct.cost;
+  pushNews("国家案件受注",`GLOBAL CAPITALが${ct.flag}${ct.countryName}の「${ct.title}」を受注した。`,"mna");
+  saveGame();
+  return {ok:true};
+}
+function processContracts(){
+  G.contracts=G.contracts.filter(ct=>{
+    if(ct.status==='open' && G.day>ct.deadlineDay) return false;
+    if(ct.status==='active' && ct.resolveDay!=null && G.day>=ct.resolveDay){
+      const c=G.countries.find(x=>x.id===ct.countryId);
+      const success=Math.random()<ct.successChance;
+      if(success){
+        G.player.cash+=ct.reward;
+        if(c && !c.collapsed){ c.happiness=clamp(c.happiness+3,0,100); c.govSupport=clamp(c.govSupport+4,0,100); c.growthTendency=clamp(c.growthTendency+0.3,-5,12); }
+        pushNews("国家案件成功",`GLOBAL CAPITALが受注した${ct.flag}${ct.countryName}の「${ct.title}」が成功裏に完了し、${fmtYen(ct.reward)}の収益を得た。`,'mna',true);
+        if(ct.reward>20) addHistory(`${ct.flag}${ct.countryName}で「${ct.title}」が成功した。`);
+      } else {
+        G.player.cash+=ct.cost*0.2;
+        if(c) c.govSupport=clamp(c.govSupport-2,0,100);
+        pushNews("国家案件失敗",`GLOBAL CAPITALが受注した${ct.flag}${ct.countryName}の「${ct.title}」は計画通りに進まず、大きな損失となった。`,'mna');
+      }
+      return false;
+    }
+    return true;
+  });
+}
+
+/* =========================================================================
+   9. WORLD HISTORY
+   ========================================================================= */
+function addHistory(text){
+  G.history.unshift({day:G.day, year:2026+Math.floor(G.day/365), text});
+  if(G.history.length>300) G.history.pop();
+}
+
+/* =========================================================================
+   10. SIMULATION (per-day loop; drives candles + all systems)
+   ========================================================================= */
+function simulateDay(){
+  const scale=1/7; // formulas tuned against a 7-day baseline
+  const m=G.macro;
+
+  m.oilPrice=clamp(m.oilPrice + normRand()*2.2*scale + (m.oilPrice>100? -0.3*scale : 0.3*scale), 25,300);
+  const oilDelta=(m.oilPrice-100)/100;
+
+  let sentDrift = -m.globalSentiment*0.06*scale + normRand()*4*scale;
+  if(m.bubbleRisk>70 && Math.random()<0.15*scale) sentDrift -= rand(15,40);
+  m.globalSentiment=clamp(m.globalSentiment+sentDrift,-100,100);
+  m.bubbleRisk=clamp(m.bubbleRisk - 1.2*scale, 0, 100);
+  m.tradeMomentum=clamp(m.tradeMomentum - 0.5*scale,-100,100);
+
+  const avgInflation=G.countries.reduce((a,c)=>a+c.inflation,0)/G.countries.length;
+  m.globalRate = clamp(m.globalRate + ((avgInflation-1.5) - m.globalRate)*0.03*scale,0,20);
+
+  // resources
+  G.resources.forEach(r=>{
+    let drift=normRand()*r.vol*scale + (m.globalSentiment/100)*0.4*scale;
+    if(G.crisis){
+      if(G.crisis.tag==='energy' && (r.id==='oil'||r.id==='gas'||r.id==='uranium')) drift+=rand(0.5,1.5)*scale*3;
+      if(G.crisis.tag==='food' && r.id==='food') drift+=rand(0.6,1.8)*scale*3;
+    }
+    r.price=clamp(r.price*(1+drift*0.01), r.base*0.3, r.base*4.5);
+  });
+
+  // countries
+  G.countries.forEach(c=>{
+    if(c.collapsed){ updateCountryStability(c,1); return; }
+    const inflPressure = oilDelta*2.2 + (m.globalSentiment<-30?0.6:0) + normRand()*0.15*scale;
+    c.inflation = clamp(c.inflation + ((c.inflationTarget+inflPressure)-c.inflation)*0.12*scale + normRand()*0.1*scale, -2, 40);
+    const rateTarget = Math.max(0, (c.inflation-1.5)*1.1);
+    c.rate = clamp(c.rate + (rateTarget-c.rate)*0.06*scale, 0, 30);
+    const conflictPenalty = c.conflict? -2.5:0;
+    const growthShock = (m.globalSentiment/100)*1.6 - (c.rate-3.5)*0.12 - (c.inflation>6? (c.inflation-6)*0.08:0) + conflictPenalty;
+    c.gdpGrowth = clamp(c.gdpGrowth + (c.growthTendency+growthShock - c.gdpGrowth)*0.1*scale + normRand()*0.12*scale, -14, 14);
+    c.gdp = Math.max(1, c.gdp*(1+ (c.gdpGrowth/100)*(1/365)));
+    c.unemployment = clamp(c.unemployment - (c.gdpGrowth-2)*0.06*scale + normRand()*0.08*scale, 0.5, 50);
+    c.poverty = clamp(c.poverty + (c.unemployment-5)*0.02*scale + normRand()*0.05*scale, 1, 70);
+    c.inequality = clamp(c.inequality + normRand()*0.06*scale, 5, 85);
+    const stress = (c.inflation-2)*0.5 + (c.unemployment-5)*0.6 + (c.inequality-40)*0.15;
+    c.happiness = clamp(c.happiness - stress*0.05*scale + normRand()*0.3*scale, 0, 100);
+    c.unrest = clamp(c.unrest + stress*0.06*scale - (c.happiness-50)*0.02*scale + normRand()*0.3*scale, 0, 100);
+    c.govSupport = clamp(c.govSupport + (c.happiness-50)*0.04*scale - c.unrest*0.02*scale + normRand()*0.3*scale, 0, 100);
+    c.approval = clamp(c.approval + (50-c.approval)*0.01*scale + normRand()*0.15*scale, 0, 100);
+    c.tension = clamp((c.tension||10) + (10-(c.tension||10))*0.02*scale + normRand()*0.1*scale, 0, 100);
+    if(c._recentInvest) c._recentInvest*=0.98;
+    updateCountryStability(c,1);
+  });
+
+  // companies (+ daily candle)
+  let prevOwnedEmployees=0;
+  G.companies.forEach(co=>{ if(hShares(co.id)>0) prevOwnedEmployees+=co.employees; });
+
+  G.companies.forEach(co=>{
+    if(co.bankrupt) return;
+    const country=G.countries.find(x=>x.id===co.country);
+    const collapsed=country&&country.collapsed;
+    const priceBefore=co.price;
+    const pctOwned=ownershipPct(co);
+    let controlBonus=0;
+    if(pctOwned>=50){
+      const strat=G.player.strategies[co.id]||"hold";
+      controlBonus = strat==="growth"?2.2: strat==="cost"?0.6 : strat==="rnd"?1.2 : 0.3;
+      if(strat==="cost") co.volatility=Math.max(0.4,co.volatility-0.01*scale);
+      if(strat==="rnd") co.tech=clamp(co.tech+0.05*scale,0,100);
+    }
+    const sectorHitPenalty = (G.crisis && G.crisis.sectorHit===co.sector) ? -3.5 : 0;
+    const collapsePenalty = collapsed? -20:0;
+    const countryFactor = country ? (country.gdpGrowth-2)*0.15 : 0;
+    const dailyDrift = ( (co.growth+controlBonus)/100 ) * (1/365);
+    const sentimentFactor = (m.globalSentiment/100)*0.5*scale/7 + sectorHitPenalty*scale/30 + collapsePenalty*scale/30;
+    const noise = normRand()*(co.volatility/100)*Math.sqrt(scale);
+    const pctChange = dailyDrift + sentimentFactor + noise + countryFactor*scale/30;
+    co.prevCap=co.marketCap;
+    co.marketCap=Math.max(0.01, co.marketCap*(1+pctChange));
+    co.price=(co.marketCap*1e12)/co.shares;
+    co.revenue=Math.max(0.01, co.revenue*(1+(co.growth/100)*(1/365)*0.6));
+    co.profit=co.revenue*clamp((co.profit/Math.max(co.revenue,0.01))+normRand()*0.01,-0.15,0.28);
+    co.employees=Math.max(50,Math.round(co.employees*(1+(co.growth/100)*(1/365)*0.3)));
+
+    const O=priceBefore, C=co.price;
+    const wick=Math.abs(co.volatility/100)*rand(0.3,1.1)*(O+C)/2;
+    const H=Math.max(O,C)+wick*rand(0,0.6);
+    const L=Math.max(0.01,Math.min(O,C)-wick*rand(0,0.6));
+    const vol=Math.round(co.marketCap*8 + (co._todayVolumeShares||0)/1e5);
+    co.candles.push({d:G.day+1,o:Math.round(O),h:Math.round(H),l:Math.round(L),c:Math.round(C),v:vol});
+    if(co.candles.length>400) co.candles.shift();
+    co._todayVolumeShares=0;
+  });
+
+  let newOwnedEmployees=0;
+  G.companies.forEach(co=>{ if(hShares(co.id)>0) newOwnedEmployees+=co.employees; });
+  const empDelta=newOwnedEmployees-prevOwnedEmployees;
+  if(empDelta>0) G.player.impact.jobsCreated+=empDelta; else G.player.impact.jobsLost+=(-empDelta);
+
+  G.day+=1;
+  processChainQueue();
+  maybeTriggerCrisis(1);
+  maybeSpawnContract();
+  processContracts();
+  if(G.day%30===0) collectMonthly();
+
+  recalcWorldPower();
+  G.player.history.push({day:G.day, netWorth:netWorth()});
+  if(G.player.history.length>240) G.player.history.shift();
+  maybeGenerateNews();
+  maybeGenerateSNS();
+  if(G.day%20===0){ G.realEstateListings.push(makeListing(pick(G.countries.filter(c=>c.major)))); if(G.realEstateListings.length>16) G.realEstateListings.shift(); }
+  G.player.recentActions=[];
+}
+function simulateStep(days){ for(let i=0;i<days;i++) simulateDay(); }
+
+function collectMonthly(){
+  let total=0;
+  G.companies.forEach(co=>{
+    const sh=hShares(co.id); if(sh<=0) return;
+    const pct=sh/co.shares;
+    const payout = pct>=0.5?0.4:0.15;
+    const div=Math.max(0,co.profit)*pct*payout/12;
+    if(div>0){ G.player.cash+=div; total+=div; }
+  });
+  G.player.realEstate.forEach(p=>{
+    const country=G.countries.find(c=>c.id===p.countryId);
+    if(country && !country.collapsed){
+      p.occupancy=clamp(p.occupancy + (country.gdpGrowth-2)*0.01,0.25,0.99);
+      p.landValue=Math.max(0.01,p.landValue*(1+(country.gdpGrowth/100)/12));
+    } else if(country&&country.collapsed){ p.occupancy=clamp(p.occupancy-0.1,0.1,0.99); p.landValue*=0.9; }
+    const net=p.rent*p.occupancy-p.maintenance;
+    G.player.cash+=net; total+=net;
+  });
+  G.player.plants.forEach(pl=>{ const net=plantMonthlyNet(pl); G.player.cash+=net; total+=net; });
+  if(G.player.bank){
+    const b=G.player.bank;
+    const interest=b.capital*rand(0.05,0.09)/12;
+    b.capital+=interest; total+=interest;
+    const instability=G.countries.filter(c=>c.collapsed||c.stability<30).length;
+    if(instability>0 && Math.random()<0.25){
+      const loss=b.capital*rand(0.04,0.15)*Math.min(instability,4)/4;
+      b.capital=Math.max(0,b.capital-loss);
+      pushNews("銀行損失",`GLOBAL CAPITAL傘下銀行で貸倒損失${fmtYen(loss)}が発生した。`,'world');
+    }
+  }
+  G.player.patents.forEach(pt=>{ const inc=pt.annualIncome/12; G.player.cash+=inc; total+=inc; });
+  if(total>0.005) pushNews("月次収益",`不動産・エネルギー・配当・特許収入などから今月は${fmtYen(total)}の副収入があった。`, 'world');
+}
+
+/* =========================================================================
+   11. ORDER BOOK (板情報 — visual depth) & SHARE-BASED TRADING / ACQUISITIONS
+   The order book below is generated as a believable snapshot of nearby bid/ask
+   depth for the UI. Actual execution price impact uses a bounded closed-form
+   model keyed to (shares traded / shares outstanding), so arbitrarily large
+   "god view" orders always fill fully without blowing up or under-filling.
+   ========================================================================= */
+function generateOrderBook(co){
+  const levels=6;
+  const stepPct = 0.12*(1+co.volatility/4); // % per level, cosmetic only
+  const liquidityUnit = co.shares*rand(0.00004,0.00025);
+  const asks=[]; let ap=co.price;
+  for(let i=1;i<=levels;i++){ ap=ap*(1+stepPct/100); asks.push({price:ap, shares:Math.round(liquidityUnit*rand(0.6,1.6)*(1+i*0.15))}); }
+  const bids=[]; let bp=co.price;
+  for(let i=1;i<=levels;i++){ bp=bp*(1-stepPct/100); bids.push({price:Math.max(bp,0.01), shares:Math.round(liquidityUnit*rand(0.6,1.6)*(1+i*0.15))}); }
+  return {asks, bids, stepPct};
+}
+function quoteOrder(co, shares, dir, country){
+  const ratio = Math.abs(shares)/Math.max(co.shares,1);
+  const impactFactor = (country&&country.regulatedUntil>G.day)?0.6:0.9;
+  const impact = clamp(ratio*impactFactor*8, 0, 0.85) * (dir>0?1:-1);
+  const avgPrice = Math.max(0.01, co.price*(1+impact/2));
+  const lastPrice = Math.max(0.01, co.price*(1+impact));
+  const cost = shares*avgPrice;
+  return {cost, executed:shares, avgPrice, lastPrice, impact};
+}
+function buyStockByShares(coId, shares){
+  const co=G.companies.find(c=>c.id===coId);
+  if(!co) return {ok:false,msg:"企業が見つかりません"};
+  shares=Math.floor(shares);
+  if(!(shares>0)) return {ok:false,msg:"株数を入力してください"};
+  const country=G.countries.find(c=>c.id===co.country);
+  const q=quoteOrder(co, shares, +1, country);
+  const costTrillion=q.cost/1e12;
+  if(costTrillion>G.player.cash) return {ok:false,msg:"資金が不足しています"};
+  G.player.cash-=costTrillion;
+  addHolding(coId, shares, costTrillion);
+  co._todayVolumeShares=(co._todayVolumeShares||0)+shares;
+  co.marketCap=Math.max(0.01,(q.lastPrice*co.shares)/1e12);
+  co.price=q.lastPrice;
+  G.macro.tradeMomentum=clamp(G.macro.tradeMomentum+q.impact*40,-100,100);
+  G.macro.bubbleRisk=clamp(G.macro.bubbleRisk + Math.abs(q.impact)*25,0,100);
+  G.player.recentActions.push({type:'buy',co:co.id,amount:costTrillion});
+  G.player.impact.totalInvested+=costTrillion;
+  pushNews("市場動向", `GLOBAL CAPITALが${co.countryName}の${co.name}株を${fmtNum(shares,0)}株（${fmtYen(costTrillion)}分）取得。株価は${fmtPct(q.impact*100)}動いた。`, "market");
+  if(costTrillion>10) checkCountryConcentration(country, costTrillion);
+  checkMonopolyAndTrigger(country);
+  if(country && ownershipPct(co)>=50 && !co._controlHistoryLogged){ co._controlHistoryLogged=true; if(co.marketCap>40) addHistory(`GLOBAL CAPITALが${co.flag}${co.name}の経営権を取得した。`); }
+  if(G.tutorial && G.tutorial.active && coId===G.tutorial.novaId){ G.tutorial.flags.boughtNova=true; }
+  recalcWorldPower();
+  saveGame();
+  return {ok:true, executed:shares, cost:costTrillion, avgPrice:q.avgPrice};
+}
+function sellStockByShares(coId, shares){
+  const co=G.companies.find(c=>c.id===coId);
+  if(!co) return {ok:false,msg:"企業が見つかりません"};
+  shares=Math.floor(shares);
+  const owned=hShares(coId);
+  if(!(shares>0)) return {ok:false,msg:"株数を入力してください"};
+  if(shares>owned) return {ok:false,msg:"保有株数を超えています"};
+  const country=G.countries.find(c=>c.id===co.country);
+  const q=quoteOrder(co, shares, -1, country);
+  const proceedsTrillion=q.cost/1e12;
+  reduceHolding(coId, shares);
+  co._todayVolumeShares=(co._todayVolumeShares||0)+shares;
+  G.player.cash+=proceedsTrillion;
+  co.marketCap=Math.max(0.01,(q.lastPrice*co.shares)/1e12);
+  co.price=q.lastPrice;
+  G.macro.tradeMomentum=clamp(G.macro.tradeMomentum+q.impact*40,-100,100);
+  G.macro.bubbleRisk=clamp(G.macro.bubbleRisk + Math.abs(q.impact)*15,0,100);
+  G.player.recentActions.push({type:'sell',co:co.id,amount:proceedsTrillion});
+  pushNews("市場動向", `GLOBAL CAPITALが${co.countryName}の${co.name}株を${fmtNum(shares,0)}株（${fmtYen(proceedsTrillion)}分）売却。株価は${fmtPct(q.impact*100)}動いた。`, "market");
+  if(Math.abs(q.impact)>0.3){
+    scheduleChain(G.day+5,'sentiment_down',{delta:rand(15,30),head:"投資家心理の悪化",body:"大量売却をきっかけに投資家心理が急速に悪化し、市場ではパニック的な売りが広がっている。"});
+    scheduleChain(G.day+6,'crisis_boost',{delta:25});
+  }
+  if(G.tutorial && G.tutorial.active && Math.abs(q.impact)>0.15){ G.tutorial.flags.didBigSell=true; }
+  recalcWorldPower();
+  saveGame();
+  return {ok:true, executed:shares, proceeds:proceedsTrillion, avgPrice:q.avgPrice};
+}
+function tenderOffer(coId, targetPct){
+  const co=G.companies.find(c=>c.id===coId);
+  if(!co) return {ok:false,msg:"企業が見つかりません"};
+  const country=G.countries.find(c=>c.id===co.country);
+  const currentShares=hShares(coId);
+  const targetShares=co.shares*(targetPct/100);
+  if(targetShares<=currentShares) return {ok:false,msg:"既に目標比率に達しています"};
+  const needShares=targetShares-currentShares;
+  const premium=(country&&country.regulatedUntil>G.day)?1.35:1.22;
+  const cost=(needShares*co.price*premium)/1e12;
+  if(cost>G.player.cash) return {ok:false,msg:`資金不足：必要額 ${fmtYen(cost)}`};
+  G.player.cash-=cost;
+  addHolding(coId, needShares, cost);
+  co._todayVolumeShares=(co._todayVolumeShares||0)+needShares;
+  const capImpact=clamp((cost/co.marketCap)*0.6,0,0.9);
+  co.marketCap=co.marketCap*(1+capImpact);
+  co.price=(co.marketCap*1e12)/co.shares;
+  G.player.recentActions.push({type:'tob',co:co.id,pct:targetPct});
+  G.player.impact.totalInvested+=cost;
+  pushNews("公開買付", `GLOBAL CAPITAL、${co.countryName}の${co.name}に対しTOB（株式公開買付）を実施し、保有比率を${targetPct}%に引き上げ。プレミアムは${Math.round((premium-1)*100)}%。`, "mna", true);
+  pushSNS(`${co.name}がまたGLOBAL CAPITALに買われた…この会社どこまで大きくなるんだ。`,"📊","trader_anon");
+  if(cost>40) addHistory(`GLOBAL CAPITALが${co.flag}${co.name}（${co.countryName}）を大型買収した。`);
+  checkMonopolyAndTrigger(country);
+  if(cost>10) checkCountryConcentration(country, cost);
+  if(G.tutorial && G.tutorial.active){ G.tutorial.flags.didTOB=true; }
+  recalcWorldPower();
+  saveGame();
+  return {ok:true};
+}
+function setStrategy(coId, strat){
+  G.player.strategies[coId]=strat;
+  const co=G.companies.find(c=>c.id===coId);
+  const label={growth:"成長重視",cost:"コスト削減",rnd:"研究開発強化",hold:"現状維持"}[strat];
+  pushNews("経営方針変更", `GLOBAL CAPITAL傘下の${co.name}が経営方針を「${label}」に変更した。`, "mna");
+  saveGame();
+}
+
+/* =========================================================================
+   12. NEWS / SNS / VOICES
+   ========================================================================= */
+function pushNews(head,body,tag,breaking){
+  G.news.unshift({id:uid('n'), day:G.day, head, body, tag, breaking:!!breaking});
+  if(G.news.length>150) G.news.pop();
+}
+function pushSNS(text,avatar,handle){
+  G.sns.unshift({id:uid('s'), day:G.day, text, avatar, handle:"@"+handle+randInt(10,999)});
+  if(G.sns.length>150) G.sns.pop();
+}
+const NEWS_TEMPLATES_MARKET=[
+ c=>`${c.co.countryName}の${c.co.name}(${c.co.sector})の株価が${c.co.dir>0?"急伸":"急落"}し、${fmtPct(c.co.dir)}を記録した。`,
+ c=>`世界の投資家心理は${c.sentiment>10?"楽観":c.sentiment<-10?"悲観":"中立"}に傾いている。センチメント指数は${c.sentiment.toFixed(0)}。`,
+];
+const NEWS_TEMPLATES_WORLD=[
+ c=>`${c.name}(${c.flag})のGDP成長率は${c.gdpGrowth.toFixed(1)}%、失業率は${c.unemployment.toFixed(1)}%となった。`,
+ c=>`${c.name}(${c.flag})でインフレ率が${c.inflation.toFixed(1)}%に達し、政策金利は${c.rate.toFixed(2)}%に調整された。`,
+ c=>`${c.name}(${c.flag})の国民幸福度は${c.happiness.toFixed(0)}、社会不安指数は${c.unrest.toFixed(0)}と報告された。`,
+ c=>`${c.name}(${c.flag})の政情安定度は${c.stability.toFixed(0)}、対GLOBAL CAPITAL緊張度は${(c.tension||0).toFixed(0)}と分析されている。`,
+];
+function maybeGenerateNews(){
+  if(Math.random()<0.55){
+    const r=Math.random();
+    if(r<0.4){
+      const co=pick(G.companies);
+      const dir=((co.marketCap-co.prevCap)/Math.max(co.prevCap,0.01))*100;
+      pushNews(`${co.sector}セクター`, NEWS_TEMPLATES_MARKET[0]({co:{...co,dir}}), "market");
+    } else if(r<0.75){
+      const c=pick(G.countries.filter(x=>!x.collapsed));
+      if(c) pushNews(`${c.flag} ${c.name}`, pick(NEWS_TEMPLATES_WORLD)(c), "world");
+    } else {
+      pushNews("市場概況", NEWS_TEMPLATES_MARKET[1]({sentiment:G.macro.globalSentiment}), "market");
+    }
+  }
+}
+const SNS_HANDLES=["trader_jp","market_watch","econ_daily","street_voice","invest_fan","night_owl_fx","global_eye","citizen404","biz_insider2","random_taker"];
+const SNS_TEMPLATES_GENERIC=[
+ ()=>"また今日も株価が動いてる。世界どうなってるんだ…",
+ ()=>"このニュース見た？経済のニュースって最近多すぎない？",
+ ()=>"投資してる身としては目が離せない一週間だった。",
+ ()=>"景気ってこんなに一つの投資会社の動きで変わるものなの…？",
+];
+function snsForAction(a){
+  if(a.type==='resource_buy'){
+    const r=G.resources.find(x=>x.id===a.resource);
+    return `GLOBAL CAPITALが${r?r.name:'資源'}を大量に買い占めてるらしい。価格に影響ありそう。`;
+  }
+  const co=G.companies.find(c=>c.id===a.co);
+  if(!co) return null;
+  const pool=[
+   `またGLOBAL CAPITALが${co.name}の株買ってる。次はどこの会社を狙うんだろう。`,
+   `${co.name}、GLOBAL CAPITALの影響でかなり株価動いたな…持ってて良かった。`,
+   `一つの投資会社がここまで市場を動かせるって、正直怖くなってきた。`,
+   `${co.name}の株、今日はチャンスかもしれない。GLOBAL CAPITALの動きに注目。`,
+  ];
+  return pick(pool);
+}
+function maybeGenerateSNS(){
+  if(Math.random()<0.7){
+    const actionTexts=G.player.recentActions.map(snsForAction).filter(Boolean);
+    let text;
+    if(actionTexts.length && Math.random()<0.5){ text=pick(actionTexts); }
+    else { text=pick(SNS_TEMPLATES_GENERIC)(); }
+    pushSNS(text, pick(["📈","💬","🌐","💰","📉","🗣️"]), pick(SNS_HANDLES));
+  }
+}
+const VOICE_ROLES=["市民の声","投資家の声","若者の声","高齢者の声","経営者の声","失業者の声"];
+function genVoiceTemplates(country){
+  const hi=country.happiness, un=country.unrest, ue=country.unemployment, infl=country.inflation, appr=country.approval;
+  if(country.collapsed){
+    return {
+     "市民の声":[`来月もこの国で普通に生活できるのか、正直不安になってきた。`,`政府がないまま、どうやって暮らしていけばいいのか分からない。`],
+     "投資家の声":[`この国の資産はもう手が出せない。回復を待つしかない。`],
+     "若者の声":[`友人の何人かはもう国を出た。自分もそろそろ考えないといけない。`],
+     "高齢者の声":[`こんな時代が来るとは思わなかった。ただ静かに過ごせる日が早く戻ってほしい。`],
+     "経営者の声":[`事業を続けられるかどうかも分からない状況だ。`],
+     "失業者の声":[`仕事どころではない状況になってしまった。`],
+    };
+  }
+  if(country.conflict){
+    return {
+     "市民の声":[`ニュースを見るたびに状況が悪くなっていて、家族を国外へ出すことも考えている。`,`街の雰囲気が明らかに変わった。落ち着かない毎日が続いている。`],
+     "投資家の声":[`この国への投資は一旦様子見にしている。リスクが高すぎる。`],
+     "若者の声":[`将来の計画を立てづらい。とにかく無事に過ごすことを優先している。`],
+     "高齢者の声":[`昔にもこういう時期があったが、また同じことが起きるとは思わなかった。`],
+     "経営者の声":[`事業計画の見直しを迫られている。従業員の安全も最優先だ。`],
+     "失業者の声":[`こんな状況で仕事を探すのは正直厳しい。`],
+    };
+  }
+  return {
+   "市民の声":[
+     `最近${infl>5?"物価がどんどん上がって":"物価はそこまで変わらなくて"}、生活の実感としては${hi>55?"なんとかやれてる":"正直きつい"}かな。`,
+     `ニュースで大きな買収の話をよく聞くけど、正直自分の生活にどう関係あるのかまだピンときてない。`,
+     `${un>40?"最近街の雰囲気がなんだかピリピリしてる気がする。":"普段の生活は今のところ大きく変わってない。"}`,
+   ],
+   "投資家の声":[
+     `GLOBAL CAPITALの動きは正直読めない。ただ、${G.macro.globalSentiment>10?"今の相場は追い風":"今の相場は逆風"}だと思ってる。`,
+     `この国の企業に投資してるけど、外資の大型買収のニュースで${appr>55?"期待の方が大きい":"警戒感が強まってる"}。`,
+   ],
+   "若者の声":[
+     `就職先を考えるとき、外資に買収されるかどうかも気になるようになった。`,
+     `${ue>7?"同世代で就職に苦労してる人が増えてる気がする。":"最近は求人も増えてきて、少しだけ先のことを考えられるようになった。"}`,
+   ],
+   "高齢者の声":[
+     `年金と物価のバランスが心配で、経済のニュースは前より真剣に見るようになった。`,
+     `昔から知ってる会社が次々買収されていくのを見ると、時代が変わったなと感じる。`,
+   ],
+   "経営者の声":[
+     `外資系投資会社の存在感が増していて、うちのような中小企業も無関係ではいられない。`,
+     `資金調達の環境は${country.rate>6?"厳しくなっている":"比較的安定している"}というのが実感だ。`,
+   ],
+   "失業者の声":[
+     `${ue>7?"求人はあるけど条件が合わなくて、なかなか決まらない。":"再就職先を探しているところ。焦らずやっていくつもり。"}`,
+     `大きな会社の買収のニュースを見るたび、自分の業界にも影響あるのか気になる。`,
+   ],
+  };
+}
+function generateVoices(country, count=6){
+  const templates=genVoiceTemplates(country);
+  const history=G.voiceLog[country.id]=G.voiceLog[country.id]||[];
+  const out=[];
+  const roles=Object.keys(templates);
+  for(let i=0;i<count && i<roles.length*2;i++){
+    const role=roles[i%roles.length];
+    const pool=templates[role];
+    let text, tries=0;
+    do{ text=pick(pool); tries++; }while(history.includes(text)&&tries<6);
+    out.push({role,text});
+    history.push(text);
+    if(history.length>40) history.shift();
+  }
+  return out;
+}
+
+/* =========================================================================
+   13. AI-GENERATED VOICES (live model call)
+   ========================================================================= */
+async function generateAIVoices(country){
+  const recentNews=G.news.slice(0,5).map(n=>n.head+": "+n.body).join(" / ");
+  const situation = country.collapsed?"この国は現在、国家崩壊状態にある。": country.conflict?`この国は現在「${country.conflict.name}」の渦中にある。`:"";
+  const prompt=`あなたは経済シミュレーションゲームの「国民の声」生成エンジンです。以下の情報をもとに、実在しない架空の市民6人分の短いコメント（各40〜90文字程度、日本語）をJSON配列で生成してください。
+国: ${country.name}
+GDP成長率: ${country.gdpGrowth.toFixed(1)}%
+インフレ率: ${country.inflation.toFixed(1)}%
+失業率: ${country.unemployment.toFixed(1)}%
+国民幸福度: ${country.happiness.toFixed(0)}/100
+社会不安: ${country.unrest.toFixed(0)}/100
+政情安定度: ${(country.stability||60).toFixed(0)}/100
+${situation}
+プレイヤー(投資会社GLOBAL CAPITAL)への評価: ${country.approval.toFixed(0)}/100
+プレイヤーのWORLD POWER: ${G.player.worldPower}
+最近のニュース: ${recentNews||"特になし"}
+
+6人の属性はそれぞれ「市民」「投資家」「若者」「高齢者」「経営者」「失業者」とし、それぞれの立場から自然な、互いに異なる視点のコメントにしてください。同じ言い回しの繰り返しは禁止です。国家崩壊や紛争の状況にある場合はそれを反映した切実な内容にしてください。
+出力は必ず次のJSON形式のみ。前置きや説明文、コードブロック記号は一切付けないでください:
+[{"role":"市民","text":"..."},{"role":"投資家","text":"..."},{"role":"若者","text":"..."},{"role":"高齢者","text":"..."},{"role":"経営者","text":"..."},{"role":"失業者","text":"..."}]`;
+  const response=await fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({ model:"claude-sonnet-4-6", max_tokens:1000, messages:[{role:"user",content:prompt}] })
+  });
+  const data=await response.json();
+  const textBlocks=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
+  const cleaned=textBlocks.replace(/```json|```/g,"").trim();
+  const parsed=JSON.parse(cleaned);
+  if(!Array.isArray(parsed)) throw new Error("unexpected format");
+  return parsed;
+}
+
+/* =========================================================================
+   13b. GOD-VIEW TUTORIAL
+   A guided sequence that uses the real game systems (not mock screens).
+   Every instruction is completed by actually performing the action in the
+   live UI; the tutorial watches real state to know when to advance.
+   ========================================================================= */
+function ensureNovaTech(){
+  let co=G.companies.find(c=>c.isTutorial);
+  if(co) return co;
+  const japan=G.countries.find(c=>c.name==="日本")||G.countries[0];
+  co={
+    id:uid('co'), name:"NOVA TECH", country:japan.id, countryName:japan.name, flag:japan.flag,
+    sector:"IT", marketCap:0.5, price:5000, shares:1e8,
+    revenue:0.2, profit:0.015, employees:1200,
+    debt:0.05, cashRes:0.1, brand:35, tech:55,
+    growth:5, volatility:2.2, prevCap:0.5, bankrupt:false, founder:false, patented:false,
+    candles:[], _todayVolumeShares:0, isTutorial:true,
+  };
+  G.companies.push(co);
+  return co;
+}
+function ensureStruggleCountry(){
+  if(G.tutorial.struggleId){
+    const existing=G.countries.find(c=>c.id===G.tutorial.struggleId);
+    if(existing) return existing;
+  }
+  let c=G.countries.find(cc=>cc.name==="アルゼンチン") || G.countries.find(cc=>!cc.major);
+  if(c){
+    c.gdpGrowth=-2; c.growthTendency=-1; c.unemployment=12; c.inflation=9;
+    c.happiness=clamp(c.happiness,20,42);
+  }
+  G.tutorial.struggleId=c?c.id:null;
+  return c;
+}
+function startTutorial(){
+  ensureNovaTech();
+  ensureStruggleCountry();
+  const worldGdp=G.countries.reduce((a,c)=>a+c.gdp,0);
+  const avgHappiness=G.countries.reduce((a,c)=>a+c.happiness,0)/G.countries.length;
+  const avgApproval=G.countries.reduce((a,c)=>a+c.approval,0)/G.countries.length;
+  G.tutorial={
+    active:true, step:0, flags:{}, skipped:false, completed:false,
+    novaId:G.companies.find(c=>c.isTutorial).id,
+    struggleId:G.tutorial?G.tutorial.struggleId:null,
+    startSnapshot:{ day:G.day, cash:G.player.cash, worldGdp, avgHappiness, avgApproval, worldPower:G.player.worldPower },
+  };
+  ensureStruggleCountry();
+  saveGame();
+}
+function endTutorial(skipped){
+  G.tutorial.active=false;
+  G.tutorial.completed=!skipped;
+  G.tutorial.skipped=!!skipped;
+  saveGame();
+  renderTutorialUI();
+  renderAll();
+}
+
+const TUTORIAL_STEPS=[
+  { key:'intro', fullscreen:true, badge:"PROLOGUE",
+    lines:[
+      "2040年","世界の金融市場には、","一つの巨大な存在が現れた。","あなたである。"
+    ],
+    lines2:[
+      "あなたに与えられた資金","100兆円",
+    ],
+    lines3:[
+      "この金をどう使うかは、あなた次第だ。",
+      "世界を豊かにすることもできる。企業を支配することもできる。",
+      "市場を動かすこともできる。そして――世界そのものを変えることもできる。",
+    ],
+  },
+  { key:'step1_market', badge:"STEP 1 / 13", title:"市場を見る",
+    instruction:"「市場」タブを開き、NOVA TECHをタップして株価やローソク足を確認してみよう。",
+    targetScreen:'market',
+    onEnter:(G)=>{ ensureNovaTech(); },
+    check:(G)=> G.tutorial.flags.viewedNova===true,
+    afterLines:["まず世界でどんな企業が動いているのか、その目で確かめた。"],
+  },
+  { key:'step2_buy', badge:"STEP 2 / 13", title:"株を買う",
+    instruction:"NOVA TECHをもう一度開き、10,000株買ってみよう。",
+    targetScreen:'market',
+    check:(G)=>{ const nova=G.companies.find(c=>c.id===G.tutorial.novaId); return nova && hShares(nova.id)>=10000; },
+    afterLines:["あなたは初めて、この世界に資本を投じた。"],
+  },
+  { key:'step3_move', badge:"STEP 3 / 13", title:"自分の注文で株価が動く",
+    instruction:"さらに大きく、合計500,000株になるまでNOVA TECHを買い増してみよう。板の売り注文が消化され、価格が動くはずだ。",
+    targetScreen:'market',
+    check:(G)=>{ const nova=G.companies.find(c=>c.id===G.tutorial.novaId); return nova && hShares(nova.id)>=500000; },
+    afterLines:["あなたの買い注文によって、市場価格が動きました。","ローソク足にも、あなたの一手がそのまま刻まれている。"],
+  },
+  { key:'step4_control', badge:"STEP 4 / 13", title:"会社を支配する",
+    instruction:"保有比率を10%（10,000,000株）まで引き上げよう。1%で市場に存在感が出始め、5%で大株主、10%で経営への影響力が生まれる。",
+    targetScreen:'market',
+    check:(G)=>{ const nova=G.companies.find(c=>c.id===G.tutorial.novaId); return nova && ownershipPct(nova)>=10; },
+    afterLines:["あなたは、この企業の主要株主になりました。"],
+  },
+  { key:'step5_intervene', badge:"STEP 5 / 13", title:"企業に介入する",
+    instruction:"保有比率50%（実質的な経営支配）まで買い増し、「経営方針」から成長戦略を選んでみよう。TOB（公開買付）を使えば一気に比率を引き上げられる。",
+    targetScreen:'market',
+    check:(G)=>{ const nova=G.companies.find(c=>c.id===G.tutorial.novaId); return nova && ownershipPct(nova)>=50 && !!G.player.strategies[nova.id]; },
+    afterLines:["あなたが企業に投資しただけで、","企業 → 雇用 → GDP → 国民 まで変化していく。"],
+  },
+  { key:'step6_wait', badge:"STEP 6 / 13", title:"企業が成長すると世界も変わる",
+    instruction:"「世界」タブから時間を進めてみよう（しばらく進めると変化が見えてくる）。",
+    targetScreen:'world',
+    onEnter:(G)=>{ G.tutorial.flags.waitStart=G.day; },
+    check:(G)=> G.day-(G.tutorial.flags.waitStart!==undefined?G.tutorial.flags.waitStart:G.day) >= 15,
+    afterLines:["企業の成長は、雇用を、GDPを、国民の暮らしを変えていく。","これが、世界を動かすということだ。"],
+  },
+  { key:'step7_income', fullscreen:true, badge:"STEP 7 / 13", title:"株以外でも稼げる",
+    lines:[
+      "収益は、株式だけではない。",
+    ],
+    lines3:[
+      "企業経営で利益を、不動産で家賃収入を。",
+      "資源や発電、銀行の融資、貿易、特許のライセンス収入。",
+      "買収した子会社からは配当も得られる。",
+      "「事業」タブから、あらゆる形で世界に介入できる。",
+    ],
+  },
+  { key:'step8_nation', badge:"STEP 8 / 13", title:"国家を動かす",
+    instruction:(G)=>{ const c=G.countries.find(x=>x.id===G.tutorial.struggleId); return c? `${c.flag}${c.name}はGDP成長率${c.gdpGrowth.toFixed(0)}%、失業率${c.unemployment.toFixed(0)}%、インフレ率${c.inflation.toFixed(0)}%と厳しい状況にある。「買収」タブの「国家投資」から、10兆円を投資してみよう。`:"「買収」タブの「国家投資」から、いずれかの国へ10兆円を投資してみよう。"; },
+    targetScreen:'mna',
+    onEnter:(G)=>{ G.uiMnaTab='infra'; ensureStruggleCountry(); },
+    check:(G)=>{ const c=G.countries.find(x=>x.id===G.tutorial.struggleId); return c && (c.infraInvested||0)>0; },
+    afterLines:["あなたが一つの国に投資した。","しかしその影響は、時間をかけて世界へ広がっていく。"],
+  },
+  { key:'step9_ripple', fullscreen:true, badge:"STEP 9 / 13", title:"世界経済を動かす",
+    lines:["インフラ投資 → 企業成長 → 雇用増加 → GDP上昇 → 国民幸福度上昇。"],
+    lines3:["一つの国への投資が、物流を変え、企業のコストを下げ、雇用を生み、","やがて世界市場にまで波及していく。"],
+  },
+  { key:'step10_dump', badge:"STEP 10 / 13", title:"悪いことも起こせる",
+    instruction:"NOVA TECH（またはお好きな保有銘柄）の株を大量に売却してみよう。株価が大きく動くはずだ。",
+    targetScreen:'market',
+    check:(G)=> G.tutorial.flags.didBigSell===true,
+    afterLines:["世界を動かす力には、必ず代償がある。"],
+  },
+  { key:'step11_diplomacy', badge:"STEP 11 / 13", title:"国家間の関係",
+    instruction:"NOVA TECH（または他の企業）にTOB（公開買付）を実施してみよう。一国への集中投資は他国の警戒を招くことがある。",
+    targetScreen:'market',
+    check:(G)=> G.tutorial.flags.didTOB===true,
+    afterLines:["ある国の企業を買収すれば、その国の経済力が高まる。","すると他国が警戒し、関税や外交摩擦が生まれることもある。"],
+  },
+  { key:'step12_people', badge:"STEP 12 / 13", title:"国民の声を見る",
+    instruction:"「国民」タブを開こう。AIが、今の世界情勢を反映した国民の声をリアルタイムに生成する。同じ文章は二度と現れない。",
+    targetScreen:'people',
+    check:(G)=> G.tutorial.flags.visitedPeopleStep===true,
+    afterLines:["世界のどこかで、あなたの決断が誰かの日常を変えている。"],
+  },
+  { key:'step13_unpredictable', fullscreen:true, badge:"STEP 13 / 13", title:"世界は予想通りには動かない",
+    lines:["一つの産業へ集中投資すれば、その産業は急成長する。"],
+    lines3:[
+      "しかし競合国が危機感を抱き、政府が規制に動くかもしれない。",
+      "企業利益が減り、市場が動揺し、資金が別の産業へ流れ、",
+      "思いもよらない場所でバブルが生まれることさえある。",
+      "一つの行動から、予測不能な連鎖が始まる。それが、この世界だ。",
+    ],
+  },
+  { key:'final', fullscreen:true, isFinal:true, badge:"TUTORIAL COMPLETE" },
+];
+
+function tutorialCurrentStep(){ return TUTORIAL_STEPS[G.tutorial.step]; }
+function checkTutorialProgress(){
+  if(!G || !G.tutorial || !G.tutorial.active) return;
+  const step=tutorialCurrentStep();
+  if(!step || step.fullscreen) return;
+  if(step.check && step.check(G)){ advanceTutorialStep(); }
+}
+function advanceTutorialStep(){
+  const finishedStep=tutorialCurrentStep();
+  G.tutorial.step++;
+  const next=tutorialCurrentStep();
+  if(!next){ G.tutorial.completed=true; G.tutorial.active=false; saveGame(); renderTutorialUI(); return; }
+  if(next.onEnter) next.onEnter(G);
+  if(next.targetScreen) switchScreen(next.targetScreen);
+  saveGame();
+  renderTutorialUI();
+  renderAll();
+}
+function tutorialSkip(){
+  if(!confirm("チュートリアルをスキップしますか？")) return;
+  endTutorial(true);
+}
+function fullscreenLinesHtml(step){
+  let html=`<div class="tut-badge">${step.badge||''}</div><div class="tut-lines">`;
+  (step.lines||[]).forEach((l,i)=>html+=`<div class="tut-line" style="animation-delay:${i*0.15}s">${escapeHtml(l)}</div>`);
+  if(step.lines2){ html+=`<div style="height:14px;"></div>`; step.lines2.forEach((l,i)=>html+=`<div class="tut-line" style="animation-delay:${i*0.15}s">${escapeHtml(l)}</div>`); }
+  if(step.lines3){ html+=`<div style="height:14px;"></div>`; step.lines3.forEach((l,i)=>html+=`<div class="tut-line small" style="animation-delay:${i*0.12}s">${escapeHtml(l)}</div>`); }
+  html+=`</div>`;
+  return html;
+}
+function tutorialFinalHtml(){
+  const snap=G.tutorial.startSnapshot||{};
+  const worldGdp=G.countries.reduce((a,c)=>a+c.gdp,0);
+  const avgHappiness=G.countries.reduce((a,c)=>a+c.happiness,0)/G.countries.length;
+  const avgApproval=G.countries.reduce((a,c)=>a+c.approval,0)/G.countries.length;
+  const nw=netWorth();
+  const controlled=G.companies.filter(co=>ownershipPct(co)>=50).length;
+  const rows=[
+    ["世界GDP合計", fmtYen(snap.worldGdp||0), fmtYen(worldGdp)],
+    ["平均国民幸福度", (snap.avgHappiness||0).toFixed(1), avgHappiness.toFixed(1)],
+    ["平均プレイヤー評価", (snap.avgApproval||0).toFixed(1), avgApproval.toFixed(1)],
+    ["プレイヤー資産", fmtYen(snap.cash!==undefined?snap.cash:100), fmtYen(nw)],
+    ["WORLD POWER", (snap.worldPower||0), G.player.worldPower],
+    ["支配下企業数", "0", controlled],
+  ];
+  let html=`<div class="tut-badge">${TUTORIAL_STEPS[TUTORIAL_STEPS.length-1].badge}</div>
+    <div class="tut-lines"><div class="tut-line">チュートリアル終了</div></div>
+    <div class="tut-summary-table">
+      <div class="tut-summary-row" style="color:var(--dim);font-size:10.5px;"><span>指標</span><span>開始時 → 現在</span></div>
+      ${rows.map(r=>`<div class="tut-summary-row"><span>${r[0]}</span><span class="mono">${r[1]} → <span class="gold">${r[2]}</span></span></div>`).join('')}
+    </div>
+    <div class="tut-lines">
+      <div class="tut-line small">ここから先に正解はありません。</div>
+      <div class="tut-line small">金を増やすのか。企業を支配するのか。国家を救うのか。</div>
+      <div class="tut-line small">世界を豊かにするのか。世界を混乱させるのか。</div>
+      <div class="tut-line small">あなたの行動が、この世界の歴史になります。</div>
+    </div>`;
+  return html;
+}
+function renderTutorialUI(){
+  const overlay=document.getElementById('tutorial-overlay');
+  const banner=document.getElementById('tutorial-banner');
+  if(!G.tutorial || !G.tutorial.active){ overlay.style.display='none'; banner.style.display='none'; overlay.innerHTML=''; banner.innerHTML=''; return; }
+  const step=tutorialCurrentStep();
+  if(!step){ overlay.style.display='none'; banner.style.display='none'; overlay.innerHTML=''; banner.innerHTML=''; return; }
+  if(step.fullscreen){
+    banner.style.display='none'; banner.innerHTML='';
+    overlay.style.display='flex';
+    const bodyHtml = step.isFinal ? tutorialFinalHtml() : fullscreenLinesHtml(step);
+    const actionsHtml = step.isFinal
+      ? `<div class="tut-actions"><button class="btn primary" id="tut-next" style="padding:13px 34px;">自由に世界を動かす</button></div>`
+      : `<div class="tut-actions"><button class="btn primary" id="tut-next" style="padding:12px 30px;">次へ</button><button class="tut-skip" id="tut-skip">チュートリアルをスキップ</button></div>`;
+    overlay.innerHTML = `<div class="tut-wrap">${bodyHtml}${actionsHtml}</div>`;
+    document.getElementById('tut-next').addEventListener('click',()=>{
+      if(step.isFinal){ endTutorial(false); } else { advanceTutorialStep(); }
+    });
+    const skipBtn=document.getElementById('tut-skip');
+    if(skipBtn) skipBtn.addEventListener('click', tutorialSkip);
+  } else {
+    overlay.style.display='none'; overlay.innerHTML='';
+    banner.style.display='flex';
+    const instr = typeof step.instruction==='function' ? step.instruction(G) : step.instruction;
+    banner.innerHTML = `
+      <div class="tut-step-label">${step.badge} ・ ${escapeHtml(step.title||'')}</div>
+      <div class="tut-instruction">${escapeHtml(instr)}</div>
+      <div class="tut-banner-row"><button class="tut-skip" id="tut-skip-banner">スキップ</button></div>
+    `;
+    document.getElementById('tut-skip-banner').addEventListener('click', tutorialSkip);
+  }
+}
+
+/* =========================================================================
+   14. RENDERING — shared helpers
+   ========================================================================= */
+let currentScreen="world";
+function switchScreen(name){
+  currentScreen=name;
+  document.querySelectorAll('.screen').forEach(el=>el.classList.remove('active'));
+  document.getElementById('screen-'+name).classList.add('active');
+  document.querySelectorAll('.navbtn').forEach(b=>b.classList.toggle('active', b.dataset.screen===name));
+  renderScreen(name);
+  document.getElementById('content').scrollTop=0;
+  if(G && G.tutorial && G.tutorial.active && name==='people'){ G.tutorial.flags.visitedPeopleStep=true; }
+  checkTutorialProgress();
+  renderTutorialUI();
+}
+function renderAll(){ renderTopbar(); renderScreen(currentScreen); checkTutorialProgress(); renderTutorialUI(); }
+function renderScreen(name){
+  if(name==="world") renderWorld();
+  else if(name==="market") renderMarket();
+  else if(name==="business") renderBusiness();
+  else if(name==="assets") renderAssets();
+  else if(name==="mna") renderMna();
+  else if(name==="news") renderNews();
+  else if(name==="people") renderPeople();
+  else if(name==="sns") renderSns();
+}
+function renderTopbar(){
+  const nw=netWorth();
+  const strip=document.getElementById('stat-strip');
+  strip.innerHTML=`
+    <div class="stat-chip"><div class="lbl">総資産</div><div class="val gold">${fmtYen(nw)}</div></div>
+    <div class="stat-chip"><div class="lbl">現金</div><div class="val">${fmtYen(G.player.cash)}</div></div>
+    <div class="stat-chip"><div class="lbl">WORLD POWER</div><div class="val teal">${G.player.worldPower}</div></div>
+    <div class="stat-chip"><div class="lbl">経過日数</div><div class="val">${G.day}日目</div></div>
+  `;
+}
+function wireCommon(root){
+  root.querySelectorAll('[data-open-company]').forEach(elm=>elm.addEventListener('click',()=>openCompanyModal(elm.dataset.openCompany)));
+  root.querySelectorAll('[data-open-country]').forEach(elm=>elm.addEventListener('click',()=>{ G.uiCountry=elm.dataset.openCountry; switchScreen('people'); }));
+}
+function openModal(html){ document.getElementById('modal-body').innerHTML=html; document.getElementById('modal-layer').classList.add('open'); }
+function closeModal(){ document.getElementById('modal-layer').classList.remove('open'); }
+
+/* =========================================================================
+   15. WORLD SCREEN (概況 / 影響 / 年表)
+   ========================================================================= */
+function worldSentimentLabel(){
+  const s=G.macro.globalSentiment;
+  if(s>30) return ["世界的な楽観ムード","teal"];
+  if(s>8) return ["やや強気","teal"];
+  if(s>-8) return ["中立","muted"];
+  if(s>-30) return ["やや弱気","red"];
+  return ["世界的な悲観ムード","red"];
+}
+function renderWorld(){
+  const el=document.getElementById('screen-world');
+  el.innerHTML=`
+    <div class="chip-select" id="world-tabs" style="margin-bottom:12px;">
+      <button data-t="overview" class="${G.uiWorldTab==='overview'?'active':''}">概況</button>
+      <button data-t="impact" class="${G.uiWorldTab==='impact'?'active':''}">影響</button>
+      <button data-t="history" class="${G.uiWorldTab==='history'?'active':''}">年表</button>
+    </div>
+    <div id="world-tab-body"></div>
+  `;
+  document.getElementById('world-tabs').addEventListener('click',e=>{
+    const b=e.target.closest('button[data-t]'); if(!b) return;
+    G.uiWorldTab=b.dataset.t; renderWorld();
+  });
+  const body=document.getElementById('world-tab-body');
+  if(G.uiWorldTab==='overview') body.innerHTML=worldOverviewHtml();
+  else if(G.uiWorldTab==='impact') body.innerHTML=worldImpactHtml();
+  else body.innerHTML=worldHistoryHtml();
+  wireCommon(el);
+  if(G.uiWorldTab==='overview'){
+    document.getElementById('speed-select').addEventListener('click',e=>{
+      const b=e.target.closest('button[data-speed]'); if(!b) return;
+      G.speed=b.dataset.speed; saveGame(); renderWorld();
+    });
+    document.getElementById('btn-advance').addEventListener('click',()=>{ doAdvance(); });
+    document.getElementById('btn-autoplay').addEventListener('click',()=>{ toggleAutoplay(); });
+  }
+}
+function worldOverviewHtml(){
+  const [sentLabel,sentClass]=worldSentimentLabel();
+  const topGainers=[...G.companies].sort((a,b)=>(b.marketCap-b.prevCap)/b.prevCap-(a.marketCap-a.prevCap)/a.prevCap).slice(0,3);
+  const collapsedCount=G.countries.filter(c=>c.collapsed).length;
+  const conflictCount=G.countries.filter(c=>c.conflict).length;
+  return `
+    <div class="panel">
+      <div class="panel-title">WORLD POWER<span class="dim">影響力指標</span></div>
+      <div class="gauge-wrap">
+        <svg width="86" height="86" viewBox="0 0 86 86">
+          <circle cx="43" cy="43" r="36" fill="none" stroke="#232C3B" stroke-width="8"/>
+          <circle cx="43" cy="43" r="36" fill="none" stroke="url(#gg)" stroke-width="8" stroke-linecap="round"
+            stroke-dasharray="${2*Math.PI*36}" stroke-dashoffset="${2*Math.PI*36*(1-G.player.worldPower/100)}"
+            transform="rotate(-90 43 43)"/>
+          <defs><linearGradient id="gg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#E8B84B"/><stop offset="100%" stop-color="#3FD9C7"/>
+          </linearGradient></defs>
+          <text x="43" y="48" text-anchor="middle" font-family="IBM Plex Mono" font-size="20" fill="#E7ECF3" font-weight="600">${G.player.worldPower}</text>
+        </svg>
+        <div class="gauge-desc">金融・企業・政治・技術・情報・資源への影響力を統合した指標。買収や大規模取引・国家投資で上昇する。</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">世界情勢<span class="${sentClass}" style="font-size:11px;">${sentLabel}</span></div>
+      <div class="grid3">
+        <div class="metric-box"><div class="lbl">原油指数</div><div class="val">${G.macro.oilPrice.toFixed(0)}</div></div>
+        <div class="metric-box"><div class="lbl">世界平均金利</div><div class="val">${G.macro.globalRate.toFixed(2)}%</div></div>
+        <div class="metric-box"><div class="lbl">過熱度</div><div class="val ${G.macro.bubbleRisk>60?'red':''}">${G.macro.bubbleRisk.toFixed(0)}</div></div>
+      </div>
+      ${G.crisis?`<hr class="sep"><div class="row-title red">⚠ ${G.crisis.name}</div><div class="row-sub">${G.crisis.desc}（残り約${Math.ceil(G.crisis.remaining)}日）</div>`:''}
+      ${(collapsedCount||conflictCount)?`<div class="badge-row">${collapsedCount?`<span class="tag warn">崩壊国家 ${collapsedCount}</span>`:''}${conflictCount?`<span class="tag warn">紛争国家 ${conflictCount}</span>`:''}</div>`:''}
+    </div>
+    <div class="panel">
+      <div class="panel-title">GLOBAL NETWORK<span class="dim">世界ネットワーク図</span></div>
+      ${renderWorldNet()}
+      <div class="row-sub" style="margin-top:6px;">ノードの大きさ＝経済規模／色＝プレイヤーへの評価。赤枠＝紛争、点滅なしの暗色＝崩壊国家。タップで国を見る。</div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">動いている銘柄</div>
+      ${topGainers.map(co=>{
+        const chg=((co.marketCap-co.prevCap)/Math.max(co.prevCap,0.01))*100;
+        return `<div class="row" data-open-company="${co.id}">
+          <div class="row-main"><div class="row-title">${co.flag} ${escapeHtml(co.name)}</div><div class="row-sub">${co.sector} ・ ${co.countryName}</div></div>
+          <div class="row-right"><div class="row-val">${fmtPrice(co.price)}</div><div class="row-delta ${deltaClass(chg)}">${fmtPct(chg)}</div></div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="panel">
+      <div class="panel-title">時間進行</div>
+      <div class="chip-select" id="speed-select">
+        ${["day","week","month","year"].map(s=>`<button data-speed="${s}" class="${G.speed===s?'active':''}">${({day:"1日",week:"1週間",month:"1ヶ月",year:"1年"})[s]}</button>`).join('')}
+      </div>
+      <div class="btn-row" style="margin-top:10px;">
+        <button class="btn primary block" id="btn-advance">▶ 時間を進める</button>
+        <button class="btn ghost" id="btn-autoplay">${G.playing?'⏸ 停止':'⏵ 自動'}</button>
+      </div>
+    </div>
+  `;
+}
+function renderWorldNet(){
+  const w=460,h=230;
+  const list=[...G.countries].sort((a,b)=>b.gdp-a.gdp).slice(0,24);
+  const cols=6, rows=Math.ceil(list.length/cols);
+  const cellW=w/cols, cellH=h/rows;
+  let svg=`<svg id="worldnet" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">`;
+  list.forEach((c,i)=>{
+    const col=i%cols, row=Math.floor(i/cols);
+    const cx=cellW*col+cellW/2, cy=cellH*row+cellH/2+6;
+    const r=clamp(Math.sqrt(c.gdp)*0.9,7,26);
+    const t=(c.approval-50)/50;
+    let color = t>0 ? `rgba(63,217,199,${0.35+0.5*t})` : `rgba(240,104,92,${0.35+0.5*-t})`;
+    if(c.collapsed) color="rgba(90,90,100,0.5)";
+    const owned=G.companies.some(co=>co.country===c.id && hShares(co.id)>0);
+    const strokeColor = c.collapsed?'#5C6980': c.conflict?'#F0685C': owned?'#E8B84B':'#232C3B';
+    svg+=`<g data-open-country="${c.id}" style="cursor:pointer;">
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="${color}" stroke="${strokeColor}" stroke-width="${(owned||c.conflict||c.collapsed)?2:1}"/>
+      <text x="${cx}" y="${cy+3}" text-anchor="middle" font-size="11">${c.flag}</text>
+      <text class="node-label" x="${cx}" y="${cy+r+9}" text-anchor="middle">${c.name.length>4?c.name.slice(0,4):c.name}</text>
+    </g>`;
+  });
+  svg+=`</svg>`;
+  return svg;
+}
+function worldImpactHtml(){
+  const im=G.player.impact;
+  const controlledCount=G.companies.filter(co=>ownershipPct(co)>=50).length;
+  const foundedCount=G.companies.filter(co=>co.founder).length;
+  const startGdp=G.countries.reduce((a,c)=>a+c.gdpBase,0);
+  const curGdp=G.countries.reduce((a,c)=>a+c.gdp,0);
+  const gdpImpact=(curGdp/Math.max(startGdp,1)-1)*100*clamp(G.player.worldPower/100,0.05,1);
+  const stockImpact=((G.companies.reduce((a,c)=>a+c.marketCap,0)/Math.max(G.companies.reduce((a,c)=>a+c.prevCap,0),1))-1)*100*10 + clamp(G.player.worldPower/8,0,20);
+  return `
+    <div class="panel">
+      <div class="panel-title">WORLD IMPACT<span class="dim">あなたが世界に与えた影響</span></div>
+      <div class="row"><div class="row-main row-title">支配下企業数（50%超）</div><div class="row-right row-val gold">${controlledCount}社</div></div>
+      <div class="row"><div class="row-main row-title">自社設立企業数</div><div class="row-right row-val">${foundedCount}社</div></div>
+      <div class="row"><div class="row-main row-title">総投資額（累計）</div><div class="row-right row-val">${fmtYen(im.totalInvested)}</div></div>
+      <div class="row"><div class="row-main row-title">雇用創出（累計）</div><div class="row-right row-val teal">+${fmtNum(im.jobsCreated,0)}人</div></div>
+      <div class="row"><div class="row-main row-title">雇用喪失（累計）</div><div class="row-right row-val red">-${fmtNum(im.jobsLost,0)}人</div></div>
+      <div class="row"><div class="row-main row-title">GDPへの影響（推定）</div><div class="row-right row-val ${gdpImpact>=0?'teal':'red'}">${fmtPct(gdpImpact,2)}</div></div>
+      <div class="row"><div class="row-main row-title">世界株価への影響（推定）</div><div class="row-right row-val ${stockImpact>=0?'teal':'red'}">${fmtPct(stockImpact,2)}</div></div>
+      <div class="row"><div class="row-main row-title">世界的危機の発生</div><div class="row-right row-val">${im.crisesTriggered}回</div></div>
+      <div class="row"><div class="row-main row-title">国家崩壊</div><div class="row-right row-val red">${im.nationsCollapsed}回</div></div>
+      <div class="row"><div class="row-main row-title">国家救済（不安定国家への投資）</div><div class="row-right row-val teal">${im.nationsSaved}回</div></div>
+    </div>
+    <div class="panel">
+      <div class="row-sub">GDP・株価への影響は世界全体の変化にプレイヤーの相対的な影響力（WORLD POWER）を掛け合わせた推定値です。厳密な因果関係の証明ではなく、目安としてご覧ください。</div>
+    </div>
+  `;
+}
+function worldHistoryHtml(){
+  if(!G.history.length) return `<div class="panel"><div class="empty-state">まだ歴史に残る出来事は起きていません。時間を進めて世界を動かしましょう。</div></div>`;
+  let html=`<div class="panel"><div class="panel-title">WORLD HISTORY<span class="dim">世界年表</span></div>`;
+  let lastYear=null;
+  G.history.forEach(h=>{
+    if(h.year!==lastYear){ html+=`<div class="tl-year">${h.year}年</div>`; lastYear=h.year; }
+    html+=`<div class="tl-item"><div class="tl-dot"></div><div class="tl-text">${escapeHtml(h.text)}</div></div>`;
+  });
+  html+=`</div>`;
+  return html;
+}
+
+/* =========================================================================
+   16. MARKET SCREEN
+   ========================================================================= */
+function allSectors(){ return [...new Set(G.companies.map(c=>c.sector))].sort(); }
+function renderMarket(){
+  const el=document.getElementById('screen-market');
+  const sectors=allSectors();
+  let list=[...G.companies];
+  if(G.uiSector!=="all") list=list.filter(c=>c.sector===G.uiSector);
+  if(G.uiMarketFilter==="owned") list=list.filter(c=>hShares(c.id)>0);
+  list.sort((a,b)=>b.marketCap-a.marketCap);
+  el.innerHTML=`
+    <div class="panel">
+      <div class="panel-title">市場<span class="dim">${list.length}銘柄</span></div>
+      <div class="chip-select" style="margin-bottom:8px;">
+        <button data-mf="all" class="${G.uiMarketFilter==='all'?'active':''}">すべて</button>
+        <button data-mf="owned" class="${G.uiMarketFilter==='owned'?'active':''}">保有銘柄</button>
+      </div>
+      <select id="sector-select">
+        <option value="all">全セクター</option>
+        ${sectors.map(s=>`<option value="${s}" ${G.uiSector===s?'selected':''}>${s}</option>`).join('')}
+      </select>
+    </div>
+    <div class="panel" style="padding-top:4px;">
+      ${list.length? list.map(co=>{
+        const chg=((co.marketCap-co.prevCap)/Math.max(co.prevCap,0.01))*100;
+        const pct=ownershipPct(co);
+        const country=G.countries.find(c=>c.id===co.country);
+        return `<div class="row" data-open-company="${co.id}">
+          <div class="row-main">
+            <div class="row-title">${co.flag} ${escapeHtml(co.name)} ${pct>=50?'<span class="tag control">支配</span>':pct>0?'<span class="tag owned">保有</span>':''}${country&&country.collapsed?'<span class="tag warn">崩壊</span>':''}</div>
+            <div class="row-sub">${co.sector} ・ 時価総額 ${fmtYen(co.marketCap)}</div>
+          </div>
+          <div class="row-right"><div class="row-val">${fmtPrice(co.price)}</div><div class="row-delta ${deltaClass(chg)}">${fmtPct(chg)}</div></div>
+        </div>`;
+      }).join('') : `<div class="empty-state">該当する銘柄がありません</div>`}
+    </div>
+  `;
+  wireCommon(el);
+  document.getElementById('sector-select').addEventListener('change',e=>{ G.uiSector=e.target.value; renderMarket(); });
+  el.querySelectorAll('[data-mf]').forEach(b=>b.addEventListener('click',()=>{ G.uiMarketFilter=b.dataset.mf; renderMarket(); }));
+}
+
+/* =========================================================================
+   17. CANDLESTICK CHART
+   ========================================================================= */
+function aggregateCandles(candles, timeframe){
+  if(!candles || !candles.length) return [];
+  const bucketSize = timeframe==='day'?1: timeframe==='week'?7: timeframe==='month'?30: 365;
+  if(bucketSize===1) return candles.slice(-60);
+  const buckets=new Map();
+  candles.forEach(c=>{
+    const key=Math.floor(c.d/bucketSize);
+    if(!buckets.has(key)) buckets.set(key,[]);
+    buckets.get(key).push(c);
+  });
+  const out=[];
+  [...buckets.keys()].sort((a,b)=>a-b).forEach(k=>{
+    const arr=buckets.get(k);
+    out.push({d:arr[arr.length-1].d, o:arr[0].o, h:Math.max(...arr.map(x=>x.h)), l:Math.min(...arr.map(x=>x.l)), c:arr[arr.length-1].c, v:arr.reduce((a,x)=>a+x.v,0)});
+  });
+  return out.slice(-40);
+}
+function renderCandleChart(co, timeframe){
+  const data=aggregateCandles(co.candles, timeframe);
+  if(data.length<2){
+    return `<div class="chart-wrap"><div class="empty-state">チャートデータを蓄積中です。時間を進めるとローソク足が表示されます。</div></div>`;
+  }
+  const W=460,H=170,VH=42,padTop=8,padBottom=4;
+  const maxP=Math.max(...data.map(d=>d.h)), minP=Math.min(...data.map(d=>d.l));
+  const range=Math.max(maxP-minP,maxP*0.01,1);
+  const maxV=Math.max(...data.map(d=>d.v),1);
+  const cw=W/data.length;
+  const cbw=Math.max(2,cw*0.6);
+  const yFor=p=>padTop+(H-padTop-padBottom)*(1-(p-minP)/range);
+  let svg=`<svg viewBox="0 0 ${W} ${H+VH+14}" xmlns="http://www.w3.org/2000/svg" width="100%">`;
+  // gridlines + price labels
+  for(let i=0;i<=2;i++){
+    const p=minP+range*i/2; const y=yFor(p);
+    svg+=`<line x1="0" y1="${y.toFixed(1)}" x2="${W}" y2="${y.toFixed(1)}" stroke="#232C3B" stroke-width="1"/>`;
+    svg+=`<text class="chart-axis-label" x="${W-2}" y="${(y-2).toFixed(1)}" text-anchor="end">¥${fmtNum(Math.round(p),0)}</text>`;
+  }
+  data.forEach((d,i)=>{
+    const x=cw*i+cw/2;
+    const up=d.c>=d.o;
+    const cls=up?'candle-up':'candle-down';
+    svg+=`<line x1="${x.toFixed(1)}" y1="${yFor(d.h).toFixed(1)}" x2="${x.toFixed(1)}" y2="${yFor(d.l).toFixed(1)}" class="${cls}" stroke-width="1"/>`;
+    const yO=yFor(d.o), yC=yFor(d.c);
+    const top=Math.min(yO,yC), bh=Math.max(1,Math.abs(yC-yO));
+    svg+=`<rect x="${(x-cbw/2).toFixed(1)}" y="${top.toFixed(1)}" width="${cbw.toFixed(1)}" height="${bh.toFixed(1)}" class="${cls}"/>`;
+    const vh=(d.v/maxV)*VH;
+    svg+=`<rect x="${(x-cbw/2).toFixed(1)}" y="${(H+14+VH-vh).toFixed(1)}" width="${cbw.toFixed(1)}" height="${vh.toFixed(1)}" class="${up?'vol-up':'vol-down'}"/>`;
+  });
+  svg+=`<line x1="0" y1="${H+14}" x2="${W}" y2="${H+14}" stroke="#232C3B" stroke-width="1"/>`;
+  svg+=`<text class="chart-axis-label" x="2" y="${H+12}">出来高</text>`;
+  svg+=`</svg>`;
+  return `<div class="chart-wrap">${svg}</div>`;
+}
+
+/* =========================================================================
+   18. BUSINESS SCREEN (保有企業 / 起業 / 不動産 / 資源 / エネルギー / 銀行 / 特許 / メディア)
+   ========================================================================= */
+function renderBusiness(){
+  const el=document.getElementById('screen-business');
+  el.innerHTML=`
+    <div class="chip-select scroll" id="biz-tabs" style="margin-bottom:12px;">
+      <button data-t="holdings">保有企業</button>
+      <button data-t="found">起業</button>
+      <button data-t="realestate">不動産</button>
+      <button data-t="resources">資源・貿易</button>
+      <button data-t="energy">エネルギー</button>
+      <button data-t="bank">銀行</button>
+      <button data-t="patents">特許</button>
+      <button data-t="media">メディア</button>
+    </div>
+    <div id="biz-tab-body"></div>
+  `;
+  el.querySelectorAll('#biz-tabs button').forEach(b=>b.classList.toggle('active', b.dataset.t===G.uiBizTab));
+  document.getElementById('biz-tabs').addEventListener('click',e=>{
+    const b=e.target.closest('button[data-t]'); if(!b) return;
+    G.uiBizTab=b.dataset.t; renderBusiness();
+  });
+  const body=document.getElementById('biz-tab-body');
+  const renderers={holdings:bizHoldings, found:bizFound, realestate:bizRealEstate, resources:bizResources, energy:bizEnergy, bank:bizBank, patents:bizPatents, media:bizMedia};
+  body.innerHTML=renderers[G.uiBizTab]();
+  wireCommon(el);
+  wireBizTab(G.uiBizTab, el);
+}
+function bizHoldings(){
+  const held=G.companies.filter(co=>hShares(co.id)>0);
+  const totalVal=held.reduce((a,co)=>a+(hShares(co.id)*co.price/1e12),0);
+  const totalCost=held.reduce((a,co)=>a+hCostBasis(co.id),0);
+  const totalPL=totalVal-totalCost;
+  return `
+    <div class="panel">
+      <div class="grid2">
+        <div class="metric-box"><div class="lbl">保有株式評価額</div><div class="val gold">${fmtYen(totalVal)}</div></div>
+        <div class="metric-box"><div class="lbl">含み損益（合計）</div><div class="val ${totalPL>=0?'teal':'red'}">${totalPL>=0?'+':''}${fmtYen(totalPL)}</div></div>
+      </div>
+    </div>
+    <div class="panel">
+      ${held.length? held.sort((a,b)=>ownershipPct(b)-ownershipPct(a)).map(co=>{
+        const pct=ownershipPct(co);
+        const sh=hShares(co.id);
+        const val=sh*co.price/1e12;
+        const cost=hCostBasis(co.id);
+        const pl=val-cost;
+        const avgPrice=sh>0?(cost*1e12)/sh:0;
+        return `<div class="row" data-open-company="${co.id}">
+          <div class="row-main">
+            <div class="row-title">${co.flag} ${escapeHtml(co.name)} ${co.founder?'<span class="tag info">自社</span>':''}</div>
+            <div class="row-sub">${fmtNum(sh,0)}株 ・ 平均取得 ${fmtPrice(avgPrice)} ・ 保有比率 ${pct.toFixed(1)}%</div>
+            <div class="pillbar"><div style="width:${clamp(pct,0,100)}%;background:${pct>=50?'var(--teal)':'var(--gold)'};"></div></div>
+          </div>
+          <div class="row-right"><div class="row-val">${fmtYen(val)}</div><div class="row-delta ${pl>=0?'up':'down'}">${pl>=0?'+':''}${fmtYen(pl)}</div>${pct>=50?'<div class="tag control" style="margin-top:4px;">支配</div>':''}</div>
+        </div>`;
+      }).join('') : `<div class="empty-state">まだ企業を保有していません。<br>市場タブから株式を購入するか、「起業」から自社企業を設立しましょう。</div>`}
+    </div>
+  `;
+}
+function bizFound(){
+  return `
+    <div class="panel">
+      <div class="panel-title">起業</div>
+      <div class="row-sub" style="margin-bottom:10px;">自ら資金を投じて企業を設立し、100%子会社として経営できます。スタートアップは成長率が高い一方、変動も大きくなります。</div>
+      <label class="field-label">国</label>
+      <select id="found-country">${G.countries.map(c=>`<option value="${c.id}">${c.flag} ${c.name}</option>`).join('')}</select>
+      <label class="field-label" style="margin-top:8px;">業種</label>
+      <select id="found-sector">${FOUNDABLE_SECTORS.map(s=>`<option value="${s}">${s}</option>`).join('')}</select>
+      <label class="field-label" style="margin-top:8px;">規模</label>
+      <div class="chip-select" id="found-tier">
+        ${FOUND_TIERS.map((t,i)=>`<button data-tier="${t.key}" class="${i===0?'active':''}">${t.label}（${fmtYen(t.cost)}）</button>`).join('')}
+      </div>
+      <button class="btn primary block" id="btn-found" style="margin-top:12px;">この企業を設立する</button>
+    </div>
+  `;
+}
+function bizRealEstate(){
+  const listings=G.realEstateListings;
+  const owned=G.player.realEstate;
+  return `
+    <div class="panel">
+      <div class="panel-title">保有不動産<span class="dim">${owned.length}件</span></div>
+      ${owned.length? owned.map(p=>{
+        const net=p.rent*p.occupancy-p.maintenance;
+        return `<div class="row">
+          <div class="row-main"><div class="row-title">${p.flag} ${p.countryName} ・ ${p.typeName}</div>
+          <div class="row-sub">稼働率 ${(p.occupancy*100).toFixed(0)}% ・ 月次純収益 ${fmtYen(net)}</div></div>
+          <div class="row-right"><div class="row-val">${fmtYen(p.landValue)}</div><button class="btn danger btn-sm" data-sell-re="${p.id}" style="margin-top:4px;">売却</button></div>
+        </div>`;
+      }).join('') : `<div class="empty-state">まだ不動産を保有していません。</div>`}
+    </div>
+    <div class="panel">
+      <div class="panel-title">物件情報<span class="dim">${listings.length}件掲載中</span></div>
+      ${listings.map(l=>`<div class="row">
+        <div class="row-main"><div class="row-title">${l.flag} ${l.countryName} ・ ${l.typeName}</div>
+        <div class="row-sub">賃料(月) ${fmtYen(l.rent)} ・ 稼働率 ${(l.occupancy*100).toFixed(0)}%</div></div>
+        <div class="row-right"><div class="row-val">${fmtYen(l.price)}</div><button class="btn primary btn-sm" data-buy-re="${l.id}" style="margin-top:4px;">購入</button></div>
+      </div>`).join('')}
+    </div>
+  `;
+}
+function bizResources(){
+  const holdings=G.player.resourceHoldings;
+  return `
+    <div class="panel">
+      <div class="panel-title">世界資源価格</div>
+      <div class="grid3">
+        ${G.resources.map(r=>`<div class="metric-box"><div class="lbl">${r.name}</div><div class="val">${r.price.toFixed(0)}</div></div>`).join('')}
+      </div>
+      <div class="row-sub" style="margin-top:8px;">安い国で仕入れ、高い国で決済すれば貿易差益（アービトラージ）を狙えます。</div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">資源を購入</div>
+      <label class="field-label">資源</label>
+      <select id="res-select">${G.resources.map(r=>`<option value="${r.id}">${r.name}</option>`).join('')}</select>
+      <label class="field-label" style="margin-top:8px;">仕入れ国</label>
+      <select id="res-country">${G.countries.map(c=>`<option value="${c.id}">${c.flag} ${c.name}</option>`).join('')}</select>
+      <div class="row-sub" id="res-price-preview" style="margin-top:6px;"></div>
+      <label class="field-label" style="margin-top:8px;">投資額（兆円） ・ 現金 ${fmtYen(G.player.cash)}</label>
+      <input type="number" id="res-amount" min="0" step="0.1" value="1"/>
+      <button class="btn primary block" id="btn-res-buy" style="margin-top:10px;">購入する</button>
+    </div>
+    <div class="panel">
+      <div class="panel-title">保有ポジション<span class="dim">${holdings.length}件</span></div>
+      ${holdings.length? holdings.map(h=>{
+        const r=G.resources.find(x=>x.id===h.resource);
+        return `<div class="row">
+          <div class="row-main"><div class="row-title">${r?r.name:h.resource}</div>
+          <div class="row-sub">仕入: ${h.boughtCountryName} ・ 投資額 ${fmtYen(h.investedAmount)}</div></div>
+          <div class="row-right">
+            <select data-sell-res-country="${h.id}" style="width:110px;font-size:10.5px;padding:5px 6px;">
+              ${G.countries.map(c=>`<option value="${c.id}" ${c.id===h.boughtCountry?'selected':''}>${c.flag}${c.name}</option>`).join('')}
+            </select>
+            <button class="btn danger btn-sm" data-sell-res="${h.id}" style="margin-top:4px;">決済</button>
+          </div>
+        </div>`;
+      }).join('') : `<div class="empty-state">保有ポジションはありません。</div>`}
+    </div>
+  `;
+}
+function bizEnergy(){
+  const plants=G.player.plants;
+  return `
+    <div class="panel">
+      <div class="panel-title">発電所を建設</div>
+      <label class="field-label">国</label>
+      <select id="plant-country">${G.countries.map(c=>`<option value="${c.id}">${c.flag} ${c.name}</option>`).join('')}</select>
+      <label class="field-label" style="margin-top:8px;">種別</label>
+      <select id="plant-type">${PLANT_TYPES.map(t=>`<option value="${t.id}">${t.name}（${fmtYen(t.cost)}）</option>`).join('')}</select>
+      <button class="btn primary block" id="btn-build-plant" style="margin-top:10px;">建設する</button>
+    </div>
+    <div class="panel">
+      <div class="panel-title">保有発電所<span class="dim">${plants.length}件</span></div>
+      ${plants.length? plants.map(pl=>{
+        const net=plantMonthlyNet(pl);
+        return `<div class="row"><div class="row-main"><div class="row-title">${pl.flag} ${pl.countryName} ・ ${pl.typeName}</div>
+        <div class="row-sub">容量 ${pl.capacity} ・ 月次純収益 ${fmtYen(net)}</div></div></div>`;
+      }).join('') : `<div class="empty-state">まだ発電所を保有していません。</div>`}
+    </div>
+  `;
+}
+function bizBank(){
+  const b=G.player.bank;
+  return `
+    <div class="panel">
+      <div class="panel-title">銀行事業</div>
+      ${b? `
+        <div class="grid2">
+          <div class="metric-box"><div class="lbl">運用資本</div><div class="val gold">${fmtYen(b.capital)}</div></div>
+          <div class="metric-box"><div class="lbl">設立</div><div class="val">DAY ${b.founded}</div></div>
+        </div>
+        <label class="field-label" style="margin-top:10px;">追加増資額（兆円）</label>
+        <input type="number" id="bank-add" min="0" step="0.5" value="5"/>
+        <button class="btn primary block" id="btn-bank-add" style="margin-top:8px;">増資する</button>
+        <div class="row-sub" style="margin-top:8px;">運用資本は毎月、市場全体への融資から利息収入（年利5〜9%）を生みます。国家の不安定化に伴い、貸倒損失が発生することがあります。</div>
+      ` : `
+        <div class="row-sub" style="margin-bottom:10px;">銀行を設立すると、預金・融資モデルによる利息収入を毎月得られます。設立費用は15兆円です。ただし不安定な国家が増えると貸倒損失のリスクが高まります。</div>
+        <button class="btn primary block" id="btn-found-bank">銀行を設立する（15兆円）</button>
+      `}
+    </div>
+  `;
+}
+function bizPatents(){
+  const eligible=G.companies.filter(co=>(ownershipPct(co)>=50) && co.tech>=80 && !co.patented);
+  const patents=G.player.patents;
+  return `
+    <div class="panel">
+      <div class="panel-title">保有特許<span class="dim">${patents.length}件</span></div>
+      ${patents.length? patents.map(p=>`<div class="row"><div class="row-main"><div class="row-title">${escapeHtml(p.name)}</div>
+        <div class="row-sub">分野 ${p.field}</div></div><div class="row-right row-val teal">年${fmtYen(p.annualIncome)}</div></div>`).join('')
+        : `<div class="empty-state">保有特許はありません。</div>`}
+    </div>
+    <div class="panel">
+      <div class="panel-title">特許化できる子会社<span class="dim">技術力80以上</span></div>
+      ${eligible.length? eligible.map(co=>`<div class="row">
+        <div class="row-main"><div class="row-title">${co.flag} ${escapeHtml(co.name)}</div><div class="row-sub">技術力 ${co.tech.toFixed(0)}</div></div>
+        <div class="row-right"><button class="btn ghost btn-sm" data-patent="${co.id}">特許化する</button></div>
+      </div>`).join('') : `<div class="empty-state">条件を満たす子会社（保有比率50%超・技術力80以上）がありません。研究開発戦略で技術力を高めましょう。</div>`}
+    </div>
+  `;
+}
+function bizMedia(){
+  const mediaCos=G.companies.filter(co=>co.sector==='メディア');
+  const ownedMedia=mediaCos.filter(co=>hShares(co.id)>0);
+  return `
+    <div class="panel">
+      <div class="panel-title">メディア事業</div>
+      <div class="row-sub">メディア企業を買収・保有すると世論への影響力（情報影響力）が高まり、プレイヤーへの評価が上向きやすくなります。市場タブの「メディア」セクターから買収できます。</div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">保有メディア企業<span class="dim">${ownedMedia.length}社</span></div>
+      ${ownedMedia.length? ownedMedia.map(co=>{
+        const pct=ownershipPct(co);
+        return `<div class="row" data-open-company="${co.id}"><div class="row-main"><div class="row-title">${co.flag} ${escapeHtml(co.name)}</div>
+        <div class="row-sub">${co.countryName} ・ 保有比率 ${pct.toFixed(1)}%</div></div></div>`;
+      }).join('') : `<div class="empty-state">まだメディア企業を保有していません。</div>`}
+      <hr class="sep">
+      <div class="panel-title" style="margin-bottom:6px;">世界のメディア企業一覧</div>
+      ${mediaCos.filter(co=>hShares(co.id)<=0).slice(0,10).map(co=>`<div class="row" data-open-company="${co.id}">
+        <div class="row-main"><div class="row-title">${co.flag} ${escapeHtml(co.name)}</div><div class="row-sub">${co.countryName} ・ ${fmtYen(co.marketCap)}</div></div>
+      </div>`).join('')}
+    </div>
+  `;
+}
+function wireBizTab(tab, el){
+  if(tab==='found'){
+    let selTier='small';
+    el.querySelectorAll('#found-tier button').forEach(b=>b.addEventListener('click',()=>{
+      selTier=b.dataset.tier;
+      el.querySelectorAll('#found-tier button').forEach(x=>x.classList.toggle('active',x===b));
+    }));
+    document.getElementById('btn-found').addEventListener('click',()=>{
+      const countryId=document.getElementById('found-country').value;
+      const sector=document.getElementById('found-sector').value;
+      const r=foundCompany(countryId, sector, selTier);
+      if(r.ok){ toast("企業を設立しました"); renderAll(); } else toast(r.msg);
+    });
+  } else if(tab==='realestate'){
+    el.querySelectorAll('[data-buy-re]').forEach(b=>b.addEventListener('click',()=>{
+      const r=buyRealEstate(b.dataset.buyRe);
+      if(r.ok){ toast("不動産を取得しました"); renderAll(); } else toast(r.msg);
+    }));
+    el.querySelectorAll('[data-sell-re]').forEach(b=>b.addEventListener('click',()=>{
+      const r=sellRealEstate(b.dataset.sellRe);
+      if(r.ok){ toast("不動産を売却しました"); renderAll(); } else toast(r.msg);
+    }));
+  } else if(tab==='resources'){
+    const updatePreview=()=>{
+      const resId=document.getElementById('res-select').value;
+      const cId=document.getElementById('res-country').value;
+      const resource=G.resources.find(r=>r.id===resId);
+      const country=G.countries.find(c=>c.id===cId);
+      if(resource&&country) document.getElementById('res-price-preview').textContent=`現地価格指数: ${resourceLocalPrice(resource,country).toFixed(1)}`;
+    };
+    document.getElementById('res-select').addEventListener('change',updatePreview);
+    document.getElementById('res-country').addEventListener('change',updatePreview);
+    updatePreview();
+    document.getElementById('btn-res-buy').addEventListener('click',()=>{
+      const resId=document.getElementById('res-select').value;
+      const cId=document.getElementById('res-country').value;
+      const amt=parseFloat(document.getElementById('res-amount').value)||0;
+      const r=buyResource(resId,cId,amt);
+      if(r.ok){ toast("資源を購入しました"); renderAll(); } else toast(r.msg);
+    });
+    el.querySelectorAll('[data-sell-res]').forEach(b=>b.addEventListener('click',()=>{
+      const sel=el.querySelector(`[data-sell-res-country="${b.dataset.sellRes}"]`);
+      const r=sellResourceHolding(b.dataset.sellRes, sel.value);
+      if(r.ok){ toast(`決済しました（${fmtYen(r.revenue)}）`); renderAll(); } else toast(r.msg);
+    }));
+  } else if(tab==='energy'){
+    document.getElementById('btn-build-plant').addEventListener('click',()=>{
+      const cId=document.getElementById('plant-country').value;
+      const tId=document.getElementById('plant-type').value;
+      const r=buildPlant(cId,tId);
+      if(r.ok){ toast("発電所を建設しました"); renderAll(); } else toast(r.msg);
+    });
+  } else if(tab==='bank'){
+    const foundBtn=document.getElementById('btn-found-bank');
+    if(foundBtn) foundBtn.addEventListener('click',()=>{ const r=foundBank(); if(r.ok){ toast("銀行を設立しました"); renderAll(); } else toast(r.msg); });
+    const addBtn=document.getElementById('btn-bank-add');
+    if(addBtn) addBtn.addEventListener('click',()=>{
+      const amt=parseFloat(document.getElementById('bank-add').value)||0;
+      const r=addBankCapital(amt);
+      if(r.ok) renderAll(); else toast(r.msg);
+    });
+  } else if(tab==='patents'){
+    el.querySelectorAll('[data-patent]').forEach(b=>b.addEventListener('click',()=>{
+      const r=filePatent(b.dataset.patent);
+      if(r.ok){ toast("特許化しました"); renderAll(); } else toast(r.msg);
+    }));
+  }
+}
+
+/* =========================================================================
+   19. ASSETS SCREEN
+   ========================================================================= */
+function renderAssets(){
+  const el=document.getElementById('screen-assets');
+  const nw=netWorth();
+  const held=G.companies.filter(co=>hShares(co.id)>0);
+  const reVal=G.player.realEstate.reduce((a,r)=>a+r.landValue,0);
+  const plVal=G.player.plants.reduce((a,p)=>a+p.cost*0.85,0);
+  const resVal=G.player.resourceHoldings.reduce((a,h)=>{ const r=G.resources.find(x=>x.id===h.resource); return a+(r?(h.units*r.price)/1e6:0); },0);
+  const bankVal=G.player.bank?G.player.bank.capital:0;
+  const patVal=G.player.patents.reduce((a,p)=>a+p.value,0);
+  const hist=G.player.history.slice(-40);
+  const maxH=Math.max(...hist.map(h=>h.netWorth),1), minH=Math.min(...hist.map(h=>h.netWorth),0);
+  const chartW=460,chartH=90;
+  const pts=hist.map((h,i)=>{
+    const x=hist.length>1? (i/(hist.length-1))*chartW : 0;
+    const y=chartH - ((h.netWorth-minH)/Math.max(maxH-minH,0.01))*chartH;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  const pw=G.player._powerBreakdown||{};
+  el.innerHTML=`
+    <div class="panel">
+      <div class="panel-title">総資産推移</div>
+      <div class="gauge-num gold">${fmtYen(nw)}</div>
+      <svg viewBox="0 0 ${chartW} ${chartH}" width="100%" height="90" style="margin-top:8px;">
+        <polyline points="${pts}" fill="none" stroke="#E8B84B" stroke-width="2"/>
+      </svg>
+    </div>
+    <div class="panel">
+      <div class="panel-title">資産内訳</div>
+      <div class="row"><div class="row-main row-title">現金</div><div class="row-right row-val">${fmtYen(G.player.cash)}</div></div>
+      <div class="row"><div class="row-main row-title">保有株式評価額（${held.length}社）</div><div class="row-right row-val">${fmtYen(nw-G.player.cash-reVal-plVal-resVal-bankVal-patVal)}</div></div>
+      <div class="row"><div class="row-main row-title">不動産（${G.player.realEstate.length}件）</div><div class="row-right row-val">${fmtYen(reVal)}</div></div>
+      <div class="row"><div class="row-main row-title">発電所（${G.player.plants.length}件）</div><div class="row-right row-val">${fmtYen(plVal)}</div></div>
+      <div class="row"><div class="row-main row-title">資源ポジション（${G.player.resourceHoldings.length}件）</div><div class="row-right row-val">${fmtYen(resVal)}</div></div>
+      <div class="row"><div class="row-main row-title">銀行資本</div><div class="row-right row-val">${fmtYen(bankVal)}</div></div>
+      <div class="row"><div class="row-main row-title">特許価値（${G.player.patents.length}件）</div><div class="row-right row-val">${fmtYen(patVal)}</div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">WORLD POWER 内訳</div>
+      ${[["金融影響力",pw.finInfluence],["企業支配力",pw.corpInfluence],["政治影響力",pw.polInfluence],["技術影響力",pw.techInfluence],["情報影響力",pw.infoInfluence],["資源影響力",pw.resInfluence]].map(([label,v])=>`
+        <div style="margin-bottom:8px;">
+          <div class="flex-between"><span class="row-sub">${label}</span><span class="mono" style="font-size:11px;">${(v||0).toFixed(0)}</span></div>
+          <div class="pillbar"><div style="width:${v||0}%;background:var(--teal);"></div></div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+  wireCommon(el);
+}
+
+/* =========================================================================
+   20. M&A SCREEN (企業買収 / 国家投資 / 政府案件)
+   ========================================================================= */
+function renderMna(){
+  const el=document.getElementById('screen-mna');
+  el.innerHTML=`
+    <div class="chip-select" id="mna-tabs" style="margin-bottom:12px;">
+      <button data-t="company" class="${G.uiMnaTab==='company'?'active':''}">企業買収</button>
+      <button data-t="infra" class="${G.uiMnaTab==='infra'?'active':''}">国家投資</button>
+      <button data-t="contract" class="${G.uiMnaTab==='contract'?'active':''}">政府案件</button>
+    </div>
+    <div id="mna-tab-body"></div>
+  `;
+  document.getElementById('mna-tabs').addEventListener('click',e=>{
+    const b=e.target.closest('button[data-t]'); if(!b) return;
+    G.uiMnaTab=b.dataset.t; renderMna();
+  });
+  const body=document.getElementById('mna-tab-body');
+  if(G.uiMnaTab==='company') body.innerHTML=mnaCompanyHtml();
+  else if(G.uiMnaTab==='infra') body.innerHTML=mnaInfraHtml();
+  else body.innerHTML=mnaContractHtml();
+  wireCommon(el);
+  wireMnaTab(G.uiMnaTab, el);
+}
+function mnaCompanyHtml(){
+  const candidates=[...G.companies].sort((a,b)=>ownershipPct(b)-ownershipPct(a)||b.marketCap-a.marketCap).slice(0,60);
+  return `
+    <div class="panel">
+      <div class="row-sub">株式を10%→20%→33%→50%→67%→90%→100%と積み増して企業を支配下に置けます。TOB（公開買付）でプレミアムを払えば一気に比率を引き上げられます。市場支配率が高まると規制当局に警戒されることがあります。</div>
+    </div>
+    <div class="panel">
+      ${candidates.map(co=>{
+        const pct=ownershipPct(co);
+        const country=G.countries.find(c=>c.id===co.country);
+        const tier = pct>=100?"完全子会社": pct>=90?"90%支配": pct>=67?"67%支配": pct>=50?"経営権取得": pct>=33?"33%(拒否権)": pct>=20?"20%(持分法)": pct>=10?"10%(大株主)": pct>0?"保有中":"未保有";
+        return `<div class="row" data-open-company="${co.id}">
+          <div class="row-main">
+            <div class="row-title">${co.flag} ${escapeHtml(co.name)} ${country&&country.regulatedUntil>G.day?'<span class="tag warn">規制中</span>':''}</div>
+            <div class="row-sub">${co.sector} ・ ${fmtYen(co.marketCap)} ・ <span class="${pct>0?'gold':'dim'}">${tier}</span></div>
+          </div>
+          <div class="row-right"><div class="row-val">${pct.toFixed(1)}%</div></div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
+function mnaInfraHtml(){
+  const defaultId = (G.tutorial && G.tutorial.active && G.tutorial.struggleId) ? G.tutorial.struggleId : null;
+  return `
+    <div class="panel">
+      <div class="row-sub">国家のインフラ（道路・港湾・電力・通信など）に投資すると、物流効率の改善から雇用拡大、国民生活の向上まで、時間をかけて連鎖的に良い効果が波及します。不安定な国家への投資は「国家救済」としてWORLD IMPACTに記録されます。</div>
+      <label class="field-label" style="margin-top:8px;">投資先の国</label>
+      <select id="infra-country">${G.countries.filter(c=>!c.collapsed).map(c=>`<option value="${c.id}" ${c.id===defaultId?'selected':''}>${c.flag} ${c.name}（安定度 ${c.stability.toFixed(0)}）</option>`).join('')}</select>
+      <label class="field-label" style="margin-top:8px;">投資額（兆円） ・ 現金 ${fmtYen(G.player.cash)}</label>
+      <input type="number" id="infra-amount" min="0" step="1" value="10"/>
+      <button class="btn primary block" id="btn-infra" style="margin-top:10px;">インフラ投資を実行</button>
+    </div>
+    <div class="panel">
+      <div class="panel-title">投資実績</div>
+      ${G.countries.filter(c=>(c.infraInvested||0)>0).sort((a,b)=>b.infraInvested-a.infraInvested).map(c=>`
+        <div class="row"><div class="row-main"><div class="row-title">${c.flag} ${c.name}</div>
+        <div class="row-sub">安定度 ${c.stability.toFixed(0)} ・ 幸福度 ${c.happiness.toFixed(0)}</div></div>
+        <div class="row-right row-val">${fmtYen(c.infraInvested)}</div></div>
+      `).join('') || `<div class="empty-state">まだ国家投資を行っていません。</div>`}
+    </div>
+  `;
+}
+function mnaContractHtml(){
+  const open=G.contracts.filter(c=>c.status==='open');
+  const active=G.contracts.filter(c=>c.status==='active');
+  return `
+    <div class="panel">
+      <div class="panel-title">受注可能な国家案件<span class="dim">${open.length}件</span></div>
+      ${open.length? open.map(ct=>`<div class="row">
+        <div class="row-main"><div class="row-title">${ct.flag} ${ct.countryName} ・ ${ct.title}</div>
+        <div class="row-sub">初期費用 ${fmtYen(ct.cost)} ・ 成功時報酬 ${fmtYen(ct.reward)} ・ 成功率 ${(ct.successChance*100).toFixed(0)}%</div></div>
+        <div class="row-right"><button class="btn primary btn-sm" data-accept-ct="${ct.id}">受注</button></div>
+      </div>`).join('') : `<div class="empty-state">現在、受注可能な案件はありません。しばらく時間を進めてみましょう。</div>`}
+    </div>
+    <div class="panel">
+      <div class="panel-title">進行中の案件<span class="dim">${active.length}件</span></div>
+      ${active.length? active.map(ct=>`<div class="row">
+        <div class="row-main"><div class="row-title">${ct.flag} ${ct.countryName} ・ ${ct.title}</div>
+        <div class="row-sub">完了予定 DAY ${ct.resolveDay}（残り約${Math.max(0,ct.resolveDay-G.day)}日）</div></div>
+      </div>`).join('') : `<div class="empty-state">進行中の案件はありません。</div>`}
+    </div>
+  `;
+}
+function wireMnaTab(tab, el){
+  if(tab==='infra'){
+    document.getElementById('btn-infra').addEventListener('click',()=>{
+      const cId=document.getElementById('infra-country').value;
+      const amt=parseFloat(document.getElementById('infra-amount').value)||0;
+      const r=investInfrastructure(cId,amt);
+      if(r.ok){ toast("インフラ投資を実行しました"); renderAll(); } else toast(r.msg);
+    });
+  } else if(tab==='contract'){
+    el.querySelectorAll('[data-accept-ct]').forEach(b=>b.addEventListener('click',()=>{
+      const r=acceptContract(b.dataset.acceptCt);
+      if(r.ok){ toast("案件を受注しました"); renderAll(); } else toast(r.msg);
+    }));
+  }
+}
+
+/* =========================================================================
+   21. NEWS SCREEN
+   ========================================================================= */
+function renderNews(){
+  const el=document.getElementById('screen-news');
+  el.innerHTML=`
+    <div class="panel">
+      <div class="panel-title">ニュース<span class="dim">${G.day}日目時点</span></div>
+      ${G.news.length? G.news.slice(0,60).map(n=>`
+        <div class="feed-item">
+          <div class="feed-time">DAY ${n.day} ・ ${n.tag==='world'?'世界情勢':n.tag==='market'?'市場':'M&A'}</div>
+          <div class="feed-head" style="${n.breaking?'color:var(--red);':''}">${n.breaking?'🔴 BREAKING — ':''}${escapeHtml(n.head)}</div>
+          <div class="feed-body">${escapeHtml(n.body)}</div>
+        </div>
+      `).join('') : `<div class="empty-state">まだニュースがありません。時間を進めてみましょう。</div>`}
+    </div>
+  `;
+}
+
+/* =========================================================================
+   22. PEOPLE SCREEN
+   ========================================================================= */
+function renderPeople(){
+  const el=document.getElementById('screen-people');
+  if(!G.uiCountry) G.uiCountry=G.countries[0].id;
+  const country=G.countries.find(c=>c.id===G.uiCountry)||G.countries[0];
+  const voices=generateVoices(country,6);
+  el.innerHTML=`
+    <div class="panel">
+      <div class="panel-title">WORLD PEOPLE</div>
+      <select id="country-select">
+        ${G.countries.map(c=>`<option value="${c.id}" ${c.id===G.uiCountry?'selected':''}>${c.flag} ${c.name}${c.collapsed?'（崩壊）':c.conflict?'（紛争）':''}</option>`).join('')}
+      </select>
+    </div>
+    <div class="panel">
+      <div class="panel-title">${country.flag} ${country.name}</div>
+      ${country.collapsed?`<div class="tag warn" style="margin-bottom:8px;">国家崩壊状態（復興まで残り約${Math.ceil(country.collapseRemaining)}日）</div>`:''}
+      ${country.conflict?`<div class="tag warn" style="margin-bottom:8px;">${country.conflict.name}（残り約${Math.ceil(country.conflict.remaining)}日）</div>`:''}
+      <div class="grid3">
+        <div class="metric-box"><div class="lbl">人口</div><div class="val">${(country.population/10000).toFixed(country.population>10000?1:2)}億人</div></div>
+        <div class="metric-box"><div class="lbl">幸福度</div><div class="val ${country.happiness>55?'teal':country.happiness<40?'red':''}">${country.happiness.toFixed(0)}</div></div>
+        <div class="metric-box"><div class="lbl">政情安定度</div><div class="val ${country.stability>60?'teal':country.stability<30?'red':''}">${country.stability.toFixed(0)}</div></div>
+        <div class="metric-box"><div class="lbl">物価不満</div><div class="val">${clamp(country.inflation*10,0,100).toFixed(0)}</div></div>
+        <div class="metric-box"><div class="lbl">失業不安</div><div class="val">${clamp(country.unemployment*6,0,100).toFixed(0)}</div></div>
+        <div class="metric-box"><div class="lbl">政府支持</div><div class="val">${country.govSupport.toFixed(0)}</div></div>
+        <div class="metric-box"><div class="lbl">社会不安</div><div class="val ${country.unrest>50?'red':''}">${country.unrest.toFixed(0)}</div></div>
+        <div class="metric-box"><div class="lbl">貧困率</div><div class="val">${country.poverty.toFixed(0)}%</div></div>
+        <div class="metric-box"><div class="lbl">対プレイヤー緊張度</div><div class="val ${country.tension>60?'red':''}">${(country.tension||0).toFixed(0)}</div></div>
+        <div class="metric-box"><div class="lbl">プレイヤー評価</div><div class="val ${country.approval>55?'teal':country.approval<40?'red':''}">${country.approval.toFixed(0)}</div></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">市民の声<button class="btn ghost" id="btn-ai-voice" style="font-size:11px;padding:6px 10px;">✨ AIで生成</button></div>
+      <div id="voice-list">
+        ${voices.map(v=>`<div class="voice-card"><div class="voice-role">${v.role}</div><div class="voice-text">${escapeHtml(v.text)}</div></div>`).join('')}
+      </div>
+    </div>
+  `;
+  wireCommon(el);
+  document.getElementById('country-select').addEventListener('change',e=>{ G.uiCountry=e.target.value; renderPeople(); });
+  document.getElementById('btn-ai-voice').addEventListener('click', async ()=>{
+    const btn=document.getElementById('btn-ai-voice');
+    const list=document.getElementById('voice-list');
+    btn.disabled=true; btn.textContent="生成中…";
+    list.innerHTML=`<div class="loading-dots">AIが${country.name}の国民の声を生成しています…</div>`;
+    try{
+      const aiVoices=await generateAIVoices(country);
+      list.innerHTML=aiVoices.map(v=>`<div class="voice-card"><div class="voice-role">${escapeHtml(v.role)} <span class="dim" style="font-weight:400;">AI生成</span></div><div class="voice-text">${escapeHtml(v.text)}</div></div>`).join('');
+    }catch(err){
+      console.error(err);
+      list.innerHTML=`<div class="empty-state">AI生成に失敗しました。通信環境をご確認のうえ再度お試しください。</div>`;
+      toast("AI生成に失敗しました");
+    }
+    btn.disabled=false; btn.textContent="✨ AIで生成";
+  });
+}
+
+/* =========================================================================
+   23. SNS SCREEN
+   ========================================================================= */
+function renderSns(){
+  const el=document.getElementById('screen-sns');
+  el.innerHTML=`
+    <div class="panel">
+      <div class="panel-title">SNS<span class="dim">世論の反応</span></div>
+      ${G.sns.length? G.sns.slice(0,60).map(s=>`
+        <div class="sns-item">
+          <div class="sns-avatar">${s.avatar}</div>
+          <div style="flex:1;">
+            <div><span class="sns-name">Anonymous</span> <span class="sns-handle">${s.handle}</span></div>
+            <div class="sns-text">${escapeHtml(s.text)}</div>
+          </div>
+        </div>
+      `).join('') : `<div class="empty-state">まだ投稿がありません。</div>`}
+    </div>
+  `;
+}
+
+/* =========================================================================
+   24. COMPANY / SETTINGS MODALS
+   ========================================================================= */
+const OWNERSHIP_TIER_LABELS=[
+ {min:90,label:"ほぼ完全支配"},{min:66,label:"株主総会での絶対的支配力"},{min:50,label:"実質的な経営支配"},
+ {min:33,label:"重要事項への強い影響力"},{min:20,label:"重要株主"},{min:10,label:"経営への影響力"},
+ {min:5,label:"大株主として認識"},{min:1,label:"市場で存在感"},{min:0,label:"未保有"},
+];
+function ownershipTierLabel(pct){ return (OWNERSHIP_TIER_LABELS.find(t=>pct>=t.min)||OWNERSHIP_TIER_LABELS[OWNERSHIP_TIER_LABELS.length-1]).label; }
+
+function renderOrderBook(co, book){
+  const asksDisplay=[...book.asks].reverse();
+  const row=(shares,price,side)=>`<div style="display:flex;justify-content:space-between;font-family:var(--font-m);font-size:11px;padding:3px 6px;background:${side==='ask'?'rgba(240,104,92,0.08)':'rgba(63,217,199,0.08)'};">
+    <span class="${side==='ask'?'red':'teal'}">${fmtNum(shares,0)}</span><span class="dim">${fmtPrice(price)}</span></div>`;
+  let html=`<div class="chart-wrap" style="padding:4px;">`;
+  asksDisplay.forEach(l=>html+=row(l.shares,l.price,'ask'));
+  html+=`<div style="text-align:center;font-family:var(--font-m);font-size:12px;font-weight:700;padding:5px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);">${fmtPrice(co.price)}</div>`;
+  book.bids.forEach(l=>html+=row(l.shares,l.price,'bid'));
+  html+=`</div>`;
+  return html;
+}
+
+function openCompanyModal(coId){
+  const co=G.companies.find(c=>c.id===coId);
+  if(!co) return;
+  if(G.tutorial && G.tutorial.active && coId===G.tutorial.novaId){ G.tutorial.flags.viewedNova=true; }
+  const pct=ownershipPct(co);
+  const shOwned=hShares(co.id);
+  const costBasis=hCostBasis(co.id);
+  const avgPrice=shOwned>0?(costBasis*1e12)/shOwned:0;
+  const valNow=shOwned*co.price/1e12;
+  const unrealized=valNow-costBasis;
+  const chg=((co.marketCap-co.prevCap)/Math.max(co.prevCap,0.01))*100;
+  const todayVol=co.candles.length?co.candles[co.candles.length-1].v:0;
+  const country=G.countries.find(c=>c.id===co.country);
+  const strat=G.player.strategies[co.id]||"hold";
+  const tiers=[10,20,33,50,67,90,100];
+  const nextTier=tiers.find(t=>t>pct);
+  const tf=G.uiChartTf||'day';
+  const book=generateOrderBook(co);
+  openModal(`
+    <div class="panel-title">${co.flag} ${escapeHtml(co.name)}</div>
+    <div class="row-sub" style="margin-bottom:10px;">${co.sector} ・ ${co.countryName} ${co.founder?'<span class="tag info">自社設立</span>':''}${co.patented?'<span class="tag gold" style="color:var(--gold);border-color:var(--gold-dim);">特許化済</span>':''}</div>
+
+    <div class="chip-select" id="chart-tf-select" style="margin-bottom:8px;">
+      <button data-tf="day" class="${tf==='day'?'active':''}">日足</button>
+      <button data-tf="week" class="${tf==='week'?'active':''}">週足</button>
+      <button data-tf="month" class="${tf==='month'?'active':''}">月足</button>
+      <button data-tf="year" class="${tf==='year'?'active':''}">年足</button>
+    </div>
+    <div id="chart-holder">${renderCandleChart(co,tf)}</div>
+
+    <div class="grid3" style="margin:12px 0;">
+      <div class="metric-box"><div class="lbl">株価</div><div class="val">${fmtPrice(co.price)}</div><div class="row-delta ${deltaClass(chg)}">${fmtPct(chg)}</div></div>
+      <div class="metric-box"><div class="lbl">出来高</div><div class="val">${fmtNum(todayVol,0)}株</div></div>
+      <div class="metric-box"><div class="lbl">発行済株式数</div><div class="val">${fmtNum(co.shares,0)}株</div></div>
+      <div class="metric-box"><div class="lbl">時価総額</div><div class="val">${fmtYen(co.marketCap)}</div></div>
+      <div class="metric-box"><div class="lbl">売上</div><div class="val">${fmtYen(co.revenue)}</div></div>
+      <div class="metric-box"><div class="lbl">利益</div><div class="val ${co.profit<0?'red':''}">${fmtYen(co.profit)}</div></div>
+    </div>
+
+    ${shOwned>0?`
+    <div class="section-label">保有ポジション</div>
+    <div class="panel" style="margin:0 0 12px;padding:12px;background:var(--panel2);">
+      <div class="grid2">
+        <div class="metric-box"><div class="lbl">保有株数</div><div class="val">${fmtNum(shOwned,0)}株</div></div>
+        <div class="metric-box"><div class="lbl">平均取得価格</div><div class="val">${fmtPrice(avgPrice)}</div></div>
+        <div class="metric-box"><div class="lbl">評価額</div><div class="val gold">${fmtYen(valNow)}</div></div>
+        <div class="metric-box"><div class="lbl">含み損益</div><div class="val ${unrealized>=0?'teal':'red'}">${unrealized>=0?'+':''}${fmtYen(unrealized)}</div></div>
+      </div>
+      <div class="row-sub" style="margin-top:8px;">保有比率 ${pct.toFixed(2)}% ・ ${ownershipTierLabel(pct)}</div>
+      <div class="pillbar"><div style="width:${clamp(pct,0,100)}%;background:${pct>=50?'var(--teal)':'var(--gold)'};"></div></div>
+    </div>
+    `:''}
+
+    <div class="section-label">板情報</div>
+    ${renderOrderBook(co,book)}
+
+    <div class="section-label">買付</div>
+    <label class="field-label">株数</label>
+    <input type="number" id="buy-shares" min="0" step="100" value="10000" />
+    <div class="row-sub" style="margin-top:4px;">必要資金：<span id="buy-cost-preview" class="mono">-</span> ・ 現金 ${fmtYen(G.player.cash)}</div>
+    <button class="btn primary block" id="btn-buy" style="margin-top:8px;">買う</button>
+
+    ${shOwned>0?`
+    <div class="section-label">売付</div>
+    <label class="field-label">株数（保有 ${fmtNum(shOwned,0)}株）</label>
+    <input type="number" id="sell-shares" min="0" step="100" value="${Math.min(shOwned,1000)}" />
+    <div class="row-sub" style="margin-top:4px;">受取金額：<span id="sell-proceeds-preview" class="mono">-</span></div>
+    <button class="btn danger block" id="btn-sell" style="margin-top:8px;">売る</button>
+    `:''}
+
+    ${nextTier?`
+    <div class="section-label">TOB（公開買付）</div>
+    <div class="row-sub" style="margin-bottom:8px;">プレミアムを払い、保有比率を一気に${nextTier}%へ引き上げます。${country&&country.regulatedUntil>G.day?'（規制中のためプレミアムが上昇しています）':''}</div>
+    <button class="btn ghost block" id="btn-tob">保有比率を${nextTier}%まで引き上げる</button>
+    `:''}
+
+    ${pct>=50?`
+    <div class="section-label">経営方針（傘下企業）</div>
+    <div class="chip-select" id="strategy-select">
+      <button data-strat="growth" class="${strat==='growth'?'active':''}">成長重視</button>
+      <button data-strat="cost" class="${strat==='cost'?'active':''}">コスト削減</button>
+      <button data-strat="rnd" class="${strat==='rnd'?'active':''}">研究開発</button>
+      <button data-strat="hold" class="${strat==='hold'?'active':''}">現状維持</button>
+    </div>
+    ${co.tech>=80&&!co.patented?`<button class="btn ghost block" id="btn-patent" style="margin-top:8px;">技術を特許化する（1兆円）</button>`:''}
+    `:''}
+
+    <div class="section-label">国家情勢（${country.flag} ${country.name}）</div>
+    <div class="grid3">
+      <div class="metric-box"><div class="lbl">GDP成長率</div><div class="val">${country.gdpGrowth.toFixed(1)}%</div></div>
+      <div class="metric-box"><div class="lbl">インフレ率</div><div class="val">${country.inflation.toFixed(1)}%</div></div>
+      <div class="metric-box"><div class="lbl">政情安定度</div><div class="val ${country.stability<30?'red':''}">${country.stability.toFixed(0)}</div></div>
+    </div>
+    ${country.collapsed?`<div class="tag warn" style="margin-top:8px;">この国は現在崩壊状態です</div>`:country.conflict?`<div class="tag warn" style="margin-top:8px;">${country.conflict.name}が進行中です</div>`:''}
+  `);
+  document.getElementById('chart-tf-select').addEventListener('click',e=>{
+    const b=e.target.closest('button[data-tf]'); if(!b) return;
+    G.uiChartTf=b.dataset.tf;
+    document.querySelectorAll('#chart-tf-select button').forEach(x=>x.classList.toggle('active',x===b));
+    document.getElementById('chart-holder').innerHTML=renderCandleChart(co,G.uiChartTf);
+  });
+  const buyInput=document.getElementById('buy-shares');
+  const buyPreview=document.getElementById('buy-cost-preview');
+  const updateBuyPreview=()=>{
+    const n=Math.floor(parseFloat(buyInput.value))||0;
+    if(n<=0){ buyPreview.textContent='-'; return; }
+    const q=quoteOrder(co,n,+1,country);
+    buyPreview.textContent=`${fmtYen(q.cost/1e12)}（約定単価 ${fmtPrice(q.avgPrice)}）`;
+  };
+  buyInput.addEventListener('input',updateBuyPreview); updateBuyPreview();
+  document.getElementById('btn-buy').addEventListener('click',()=>{
+    const n=Math.floor(parseFloat(buyInput.value))||0;
+    const r=buyStockByShares(co.id,n);
+    if(r.ok){ toast(`${fmtNum(r.executed,0)}株を購入しました`); closeModal(); renderAll(); } else toast(r.msg);
+  });
+  const sellInput=document.getElementById('sell-shares');
+  if(sellInput){
+    const sellPreview=document.getElementById('sell-proceeds-preview');
+    const updateSellPreview=()=>{
+      const n=Math.floor(parseFloat(sellInput.value))||0;
+      if(n<=0){ sellPreview.textContent='-'; return; }
+      const q=quoteOrder(co,n,-1,country);
+      sellPreview.textContent=`${fmtYen(q.cost/1e12)}（約定単価 ${fmtPrice(q.avgPrice)}）`;
+    };
+    sellInput.addEventListener('input',updateSellPreview); updateSellPreview();
+    document.getElementById('btn-sell').addEventListener('click',()=>{
+      const n=Math.floor(parseFloat(sellInput.value))||0;
+      const r=sellStockByShares(co.id,n);
+      if(r.ok){ toast(`${fmtNum(r.executed,0)}株を売却しました`); closeModal(); renderAll(); } else toast(r.msg);
+    });
+  }
+  const tobBtn=document.getElementById('btn-tob');
+  if(tobBtn) tobBtn.addEventListener('click',()=>{
+    const r=tenderOffer(co.id,nextTier);
+    if(r.ok){ toast(`TOBを実施しました（${nextTier}%）`); closeModal(); renderAll(); } else toast(r.msg);
+  });
+  const stratSel=document.getElementById('strategy-select');
+  if(stratSel) stratSel.addEventListener('click',e=>{
+    const b=e.target.closest('button[data-strat]'); if(!b) return;
+    setStrategy(co.id,b.dataset.strat);
+    closeModal(); renderAll();
+  });
+  const patentBtn=document.getElementById('btn-patent');
+  if(patentBtn) patentBtn.addEventListener('click',()=>{
+    const r=filePatent(co.id);
+    if(r.ok){ toast("特許化しました"); closeModal(); renderAll(); } else toast(r.msg);
+  });
+}
+
+function openSettingsModal(){
+  openModal(`
+    <div class="panel-title">設定</div>
+    <div class="section-label">セーブデータ</div>
+    <div class="btn-row">
+      <button class="btn ghost block" id="btn-save-now">今すぐ保存</button>
+      <button class="btn danger block" id="btn-reset">リセット</button>
+    </div>
+    <div class="section-label">チュートリアル</div>
+    <button class="btn ghost block" id="btn-start-tutorial">チュートリアルを開始する</button>
+    <div class="section-label">デバッグモード</div>
+    <div class="chip-select">
+      <button data-dbg="on" class="${G.debug?'active':''}">ON</button>
+      <button data-dbg="off" class="${!G.debug?'active':''}">OFF</button>
+    </div>
+    ${G.debug?`
+      <hr class="sep">
+      <label class="field-label">現金を設定（兆円）</label>
+      <input type="number" id="dbg-cash" value="${G.player.cash.toFixed(1)}" />
+      <button class="btn ghost block" id="dbg-set-cash" style="margin-top:8px;">反映する</button>
+      <div class="section-label">時間を一気に進める</div>
+      <div class="chip-select">
+        <button data-jump="30">+30日</button>
+        <button data-jump="90">+90日</button>
+        <button data-jump="365">+1年</button>
+      </div>
+      <div class="section-label">危機を発生させる</div>
+      <button class="btn ghost block" id="dbg-crisis">ランダムな危機を発生</button>
+      <div class="section-label">国家崩壊を発生させる</div>
+      <select id="dbg-collapse-country">${G.countries.filter(c=>!c.collapsed).map(c=>`<option value="${c.id}">${c.flag} ${c.name}</option>`).join('')}</select>
+      <button class="btn ghost block" id="dbg-collapse" style="margin-top:8px;">選択国を崩壊させる</button>
+    `:''}
+    <div class="section-label" style="margin-top:20px;">このゲームについて</div>
+    <div class="row-sub">GLOBAL CAPITALを率い、世界経済に介入する神視点シミュレーション。目的は自由——世界を発展させても、支配しても、破壊してもいい。ローソク足は日単位のゲーム内時間をもとに生成されており、分足・時間足は日足を基準に簡略化しています。</div>
+  `);
+  document.getElementById('btn-save-now').addEventListener('click',()=>{ saveGame(); toast("保存しました"); });
+  document.getElementById('btn-start-tutorial').addEventListener('click',()=>{
+    startTutorial();
+    closeModal();
+    const step=tutorialCurrentStep();
+    if(step && step.targetScreen) switchScreen(step.targetScreen); else renderAll();
+    renderTutorialUI();
+    toast("チュートリアルを開始しました");
+  });
+  document.getElementById('btn-reset').addEventListener('click',()=>{
+    if(confirm("本当にリセットしますか？進行状況はすべて失われます。")){ closeModal(); resetGame(); }
+  });
+  document.querySelectorAll('[data-dbg]').forEach(b=>b.addEventListener('click',()=>{
+    G.debug=b.dataset.dbg==="on"; saveGame(); openSettingsModal();
+  }));
+  const setCashBtn=document.getElementById('dbg-set-cash');
+  if(setCashBtn) setCashBtn.addEventListener('click',()=>{
+    G.player.cash=parseFloat(document.getElementById('dbg-cash').value)||G.player.cash;
+    saveGame(); toast("現金を変更しました"); renderAll();
+  });
+  document.querySelectorAll('[data-jump]').forEach(b=>b.addEventListener('click',()=>{
+    simulateStep(parseInt(b.dataset.jump,10)); saveGame(); closeModal(); renderAll(); toast("時間を進めました");
+  }));
+  const crisisBtn=document.getElementById('dbg-crisis');
+  if(crisisBtn) crisisBtn.addEventListener('click',()=>{
+    G.crisis=null; G.macro.bubbleRisk=100;
+    maybeTriggerCrisis(1);
+    if(!G.crisis){ const c=pick(CRISIS_POOL); G.crisis={name:c.name,desc:c.desc,tag:c.tag,sectorHit:c.sectorHit,remaining:randInt(c.dur[0],c.dur[1])}; pushNews("BREAKING",`${c.name}が発生。${c.desc}`,"world",true); G.player.impact.crisesTriggered++; }
+    saveGame(); closeModal(); renderAll(); toast("危機を発生させました");
+  });
+  const collapseBtn=document.getElementById('dbg-collapse');
+  if(collapseBtn) collapseBtn.addEventListener('click',()=>{
+    const c=G.countries.find(x=>x.id===document.getElementById('dbg-collapse-country').value);
+    if(c) triggerCollapse(c);
+    saveGame(); closeModal(); renderAll(); toast("国家崩壊を発生させました");
+  });
+}
+
+/* =========================================================================
+   25. TIME CONTROL
+   ========================================================================= */
+const SPEED_DAYS={day:1, week:7, month:30, year:365};
+function doAdvance(){
+  simulateStep(SPEED_DAYS[G.speed]);
+  saveGame();
+  renderAll();
+}
+let autoplayTimer=null;
+function toggleAutoplay(){
+  G.playing=!G.playing;
+  if(G.playing){
+    autoplayTimer=setInterval(()=>{ doAdvance(); },1600);
+    toast("自動進行を開始しました");
+  } else {
+    clearInterval(autoplayTimer); autoplayTimer=null;
+    toast("自動進行を停止しました");
+  }
+  saveGame();
+  renderWorld();
+}
+
+/* =========================================================================
+   26. BOOT
+   ========================================================================= */
+async function boot(){
+  const loaded=await loadGame();
+  if(!loaded){
+    G=initWorld();
+    recalcWorldPower();
+    startTutorial();
+    saveGame();
+  } else {
+    recalcWorldPower();
+  }
+  document.querySelectorAll('.navbtn').forEach(b=>b.addEventListener('click',()=>switchScreen(b.dataset.screen)));
+  document.getElementById('modal-backdrop').addEventListener('click',closeModal);
+  document.getElementById('modal-close-btn').addEventListener('click',closeModal);
+  document.getElementById('btn-settings').addEventListener('click',openSettingsModal);
+  if(G.tutorial && G.tutorial.active){
+    const step=tutorialCurrentStep();
+    if(step && step.targetScreen) switchScreen(step.targetScreen);
+  }
+  renderAll();
+}
+boot();
+
+})();
+</script>
+</body>
+</html>
