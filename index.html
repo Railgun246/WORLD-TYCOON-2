@@ -308,7 +308,7 @@ hr.sep{border:none;border-top:1px solid var(--border);margin:12px 0;}
     <button class="navbtn" data-screen="assets"><span class="ic">💰</span>資産</button>
     <button class="navbtn" data-screen="mna"><span class="ic">🏦</span>買収</button>
     <button class="navbtn" data-screen="news"><span class="ic">📰</span>ニュース</button>
-    <button class="navbtn" data-screen="people"><span class="ic">👥</span>国民</button>
+    <button class="navbtn" data-screen="people"><span class="ic">👥</span>国家</button>
     <button class="navbtn" data-screen="sns"><span class="ic">📱</span>SNS</button>
   </div></div>
 
@@ -401,6 +401,25 @@ function makePolitician(countryName){
   const title = POLITICIAN_TITLES_PRESIDENTIAL.has(countryName) ? "大統領" : "首相";
   return { name:`${pick(POLITICIAN_SURNAMES)}${title}`, title, approval:rand(38,62), relation:50 };
 }
+
+const AI_PERSONAS=[
+ {key:'aggressive', label:'攻撃的', desc:'軍事力増強と圧力外交を好む'},
+ {key:'defensive', label:'防衛的', desc:'軍備は防衛目的に限定し同盟を重視'},
+ {key:'economic', label:'経済重視', desc:'インフラ・産業投資を最優先'},
+ {key:'diplomatic', label:'外交重視', desc:'同盟・条約を積極的に締結'},
+ {key:'resource', label:'資源重視', desc:'資源確保のための貿易・投資を優先'},
+ {key:'tech', label:'技術重視', desc:'研究開発と先端産業を重視'},
+ {key:'peaceful', label:'平和主義', desc:'軍事行動を避け内政に集中'},
+ {key:'expansionist', label:'領土拡大型', desc:'勢力拡大の機会を常に伺う'},
+];
+const PERSONA_BY_COUNTRY={
+ "アメリカ":"expansionist","中国":"expansionist","ロシア":"aggressive","サウジアラビア":"resource",
+ "UAE":"resource","日本":"tech","韓国":"tech","台湾":"tech","ドイツ":"economic","フランス":"diplomatic",
+ "イギリス":"diplomatic","イタリア":"economic","カナダ":"peaceful","オーストラリア":"resource",
+ "インド":"economic","ブラジル":"resource","メキシコ":"economic","シンガポール":"economic",
+ "スイス":"peaceful","スイス連邦":"peaceful",
+};
+function pickPersona(countryName){ return PERSONA_BY_COUNTRY[countryName] || pick(AI_PERSONAS).key; }
 
 const SECTOR_SUFFIX={
  "IT":["システムズ","テクノロジーズ","ソフトウェア","デジタル"],
@@ -529,6 +548,7 @@ function freshState(){
     uiWorldTab:"overview", uiBizTab:"holdings", uiMnaTab:"company", uiChartTf:"day",
     uiInfraCountry:null, uiResResource:"oil", uiResCountry:null,
     uiFoundCountry:null, uiFoundSector:"AI", uiFoundTier:"small",
+    uiNationTab:"overview", uiWarTarget:null, uiDiploTarget:null,
     tutorial:{active:false, step:0, flags:{}, novaId:null, struggleId:null, skipped:false, completed:false, startSnapshot:null},
   };
 }
@@ -549,6 +569,10 @@ function initWorld(){
       resourceMod:buildResourceMod(name),
       influence:{total:0,econ:0,corp:0,media:0,policy:0}, _policyScore:0,
       politician:makePolitician(name),
+      military:rand(25,65), militaryBudgetRate:rand(1,3.5),
+      allies:[], enemies:[], vassals:[], overlordId:null, territorySize:100, war:null,
+      aiPersona:pickPersona(name), playerControlled:false,
+      delegation:{economy:true,diplomacy:true,military:true,domestic:true},
     });
   });
   MINOR_COUNTRIES.forEach(([name,flag])=>{
@@ -564,6 +588,10 @@ function initWorld(){
       resourceMod:buildResourceMod(name),
       influence:{total:0,econ:0,corp:0,media:0,policy:0}, _policyScore:0,
       politician:makePolitician(name),
+      military:rand(10,40), militaryBudgetRate:rand(0.5,3),
+      allies:[], enemies:[], vassals:[], overlordId:null, territorySize:rand(20,60), war:null,
+      aiPersona:pickPersona(name), playerControlled:false,
+      delegation:{economy:true,diplomacy:true,military:true,domestic:true},
     });
   });
   s.countries.forEach(c=>{ c.gdpBase=c.gdpBase||c.gdp; c.rivalId=null; });
@@ -637,9 +665,17 @@ function migrateState(s){
   s.chainQueue=s.chainQueue||[];
   s.history=s.history||[];
   s.news=s.news||[]; s.sns=s.sns||[]; s.voiceLog=s.voiceLog||{}; s.voiceViewCache=s.voiceViewCache||{};
+  // migrate voiceViewCache from old single-entry shape {source,voices,day} to {history:[{day,source,voices}]}
+  Object.keys(s.voiceViewCache).forEach(cid=>{
+    const v=s.voiceViewCache[cid];
+    if(v && !v.history){
+      s.voiceViewCache[cid]={ history: v.voices ? [{day:v.day||0, source:v.source||'template', voices:v.voices}] : [] };
+    }
+  });
   s.uiWorldTab=s.uiWorldTab||"overview"; s.uiBizTab=s.uiBizTab||"holdings"; s.uiMnaTab=s.uiMnaTab||"company"; s.uiChartTf=s.uiChartTf||"day";
   s.uiInfraCountry=s.uiInfraCountry||null; s.uiResResource=s.uiResResource||"oil"; s.uiResCountry=s.uiResCountry||null;
   s.uiFoundCountry=s.uiFoundCountry||null; s.uiFoundSector=s.uiFoundSector||"AI"; s.uiFoundTier=s.uiFoundTier||"small";
+  s.uiNationTab=s.uiNationTab||"overview"; s.uiWarTarget=s.uiWarTarget||null; s.uiDiploTarget=s.uiDiploTarget||null;
   const p=s.player;
   p.realEstate=p.realEstate||[]; p.plants=p.plants||[]; p.bank=p.bank||null; p.patents=p.patents||[]; p.resourceHoldings=p.resourceHoldings||[];
   p.impact=p.impact||{totalInvested:0,jobsCreated:0,jobsLost:0,crisesTriggered:0,nationsCollapsed:0,nationsSaved:0,companiesFounded:0};
@@ -672,6 +708,17 @@ function migrateState(s){
     if(!c.influence) c.influence={total:0,econ:0,corp:0,media:0,policy:0};
     if(c._policyScore===undefined) c._policyScore=0;
     if(!c.politician) c.politician=makePolitician(c.name);
+    if(c.military===undefined) c.military=rand(15,55);
+    if(c.militaryBudgetRate===undefined) c.militaryBudgetRate=rand(1,3);
+    if(!c.allies) c.allies=[];
+    if(!c.enemies) c.enemies=[];
+    if(!c.vassals) c.vassals=[];
+    if(c.overlordId===undefined) c.overlordId=null;
+    if(c.territorySize===undefined) c.territorySize=c.major?100:rand(20,60);
+    if(c.war===undefined) c.war=null;
+    if(!c.aiPersona) c.aiPersona=pickPersona(c.name);
+    if(c.playerControlled===undefined) c.playerControlled=false;
+    if(!c.delegation) c.delegation={economy:true,diplomacy:true,military:true,domestic:true};
     if(!c.resourceMod) c.resourceMod=buildResourceMod(c.name);
     if(c.rivalId===undefined){ const rn=RIVAL_MAP[c.name]; const r=rn?s.countries.find(x=>x.name===rn):null; c.rivalId=r?r.id:null; }
   });
@@ -1209,6 +1256,62 @@ const POLICIES=[
  {id:'infra_data', category:'インフラ', name:'データセンター誘致政策', cost:18, minInfluence:40,
    desc:'データセンター誘致のための規制緩和・優遇策を提言する。',
    effect:(c)=>{ G.companies.filter(co=>co.country===c.id && (co.sector==='IT'||co.sector==='AI')).forEach(co=>co.growth=clamp(co.growth+2,-10,20)); }},
+ // ---- 良い政策：内政・国民生活 ----
+ {id:'education_invest', category:'内政', name:'教育投資', cost:12, minInfluence:25,
+   desc:'教育制度への投資を提言する。長期的な生産性向上が期待される。',
+   effect:(c)=>{ c.growthTendency=clamp(c.growthTendency+0.25,-5,12); c.happiness=clamp(c.happiness+2,0,100); }},
+ {id:'healthcare_invest', category:'内政', name:'医療投資', cost:14, minInfluence:25,
+   desc:'医療制度の拡充を提言する。',
+   effect:(c)=>{ c.happiness=clamp(c.happiness+4,0,100); c.poverty=clamp(c.poverty-2,1,70); }},
+ {id:'housing_support', category:'内政', name:'住宅支援策', cost:10, minInfluence:20,
+   desc:'低所得層への住宅支援を提言する。',
+   effect:(c)=>{ c.inequality=clamp(c.inequality-3,5,85); c.happiness=clamp(c.happiness+2,0,100); }},
+ {id:'food_price_control', category:'内政', name:'食料価格対策', cost:8, minInfluence:20,
+   desc:'食料価格の安定化策を提言する。',
+   effect:(c)=>{ c.inflation=clamp(c.inflation-1.2,-2,40); c.happiness=clamp(c.happiness+2,0,100); }},
+ {id:'employment_support', category:'内政', name:'雇用支援策', cost:10, minInfluence:25,
+   desc:'職業訓練・雇用マッチング支援を提言する。',
+   effect:(c)=>{ c.unemployment=clamp(c.unemployment-1.5,0.5,50); c.happiness=clamp(c.happiness+1.5,0,100); }},
+ {id:'poverty_reduction', category:'内政', name:'貧困対策', cost:13, minInfluence:30,
+   desc:'貧困層への給付・支援策を提言する。',
+   effect:(c)=>{ c.poverty=clamp(c.poverty-4,1,70); c.unrest=clamp(c.unrest-3,0,100); }},
+ {id:'public_transit', category:'インフラ', name:'公共交通整備', cost:15, minInfluence:35,
+   desc:'公共交通網の整備を提言する。',
+   effect:(c)=>{ c.happiness=clamp(c.happiness+2,0,100); c.growthTendency=clamp(c.growthTendency+0.2,-5,12); }},
+ {id:'disaster_prep', category:'インフラ', name:'災害対策強化', cost:11, minInfluence:25,
+   desc:'防災インフラの強化を提言する。',
+   effect:(c)=>{ c.stability=clamp(c.stability+3,0,100); c.happiness=clamp(c.happiness+1,0,100); }},
+ {id:'renewable_energy', category:'産業', name:'再生可能エネルギー投資', cost:16, minInfluence:35,
+   desc:'再エネ産業への投資を提言する。',
+   effect:(c)=>{ G.companies.filter(co=>co.country===c.id && co.sector==='エネルギー').forEach(co=>co.growth=clamp(co.growth+2,-10,20)); c.happiness=clamp(c.happiness+1,0,100); }},
+ // ---- 中立・リスクのある政策 ----
+ {id:'tax_increase', category:'経済', name:'増税', cost:6, minInfluence:20,
+   desc:'財政再建のための増税を提言する。財政は改善するが国民の反発を招く。',
+   effect:(c)=>{ c.taxRate=clamp(c.taxRate+3,5,55); c.happiness=clamp(c.happiness-4,0,100); c.unrest=clamp(c.unrest+3,0,100); }},
+ {id:'military_spending', category:'軍事', name:'軍事費増加', cost:14, minInfluence:35,
+   desc:'国防予算の増額を提言する。軍事力は高まるが財政負担が増す。',
+   effect:(c)=>{ c.military=clamp(c.military+8,0,100); c.taxRate=clamp(c.taxRate+1,5,55); }},
+ {id:'import_restriction', category:'貿易', name:'輸入規制', cost:11, minInfluence:30,
+   desc:'輸入品への規制強化を提言する。国内産業保護と引き換えに物価が上がる。',
+   effect:(c)=>{ Object.keys(c.resourceMod||{}).forEach(k=>c.resourceMod[k]=Math.min(2.0,c.resourceMod[k]*1.1)); c.inflation=clamp(c.inflation+0.8,-2,40); }},
+ {id:'capital_controls', category:'経済', name:'資本規制', cost:12, minInfluence:35,
+   desc:'資本移動の規制を提言する。金融の安定と引き換えに投資が冷え込む。',
+   effect:(c)=>{ c.stability=clamp(c.stability+4,0,100); c.growthTendency=clamp(c.growthTendency-0.5,-5,12); }},
+ {id:'corp_regulation', category:'経済', name:'企業規制強化', cost:10, minInfluence:30,
+   desc:'企業活動への規制を強化するよう提言する。',
+   effect:(c)=>{ c.inequality=clamp(c.inequality-2,5,85); G.companies.filter(co=>co.country===c.id).forEach(co=>co.growth=clamp(co.growth-1,-10,20)); }},
+ {id:'info_control', category:'内政', name:'情報規制', cost:13, minInfluence:40,
+   desc:'情報流通への統制を提言する。社会の安定と引き換えに国際的な評判が下がる。',
+   effect:(c)=>{ c.unrest=clamp(c.unrest-5,0,100); c.approval=clamp(c.approval-5,0,100); }},
+ {id:'nationalization', category:'経済', name:'主要産業の国有化', cost:25, minInfluence:55,
+   desc:'主要産業を国有化するよう提言する。国家の統制は強まるが企業価値が下落する。',
+   effect:(c)=>{ G.companies.filter(co=>co.country===c.id).forEach(co=>{ co.marketCap=Math.max(0.01,co.marketCap*0.85); co.price=(co.marketCap*1e12)/co.shares; }); c.stability=clamp(c.stability+5,0,100); }},
+ {id:'monetary_tightening', category:'経済', name:'金融引き締め', cost:14, minInfluence:35,
+   desc:'金融引き締めを提言する。インフレは抑制されるが景気が冷え込む。',
+   effect:(c)=>{ c.rate=clamp(c.rate+1.5,0,30); c.inflation=clamp(c.inflation-1.5,-2,40); c.gdpGrowth=clamp(c.gdpGrowth-0.5,-14,14); }},
+ {id:'price_controls', category:'経済', name:'強制的な価格統制', cost:15, minInfluence:40,
+   desc:'物価への強制的な統制を提言する。短期的な物価抑制と引き換えに市場が歪む。',
+   effect:(c)=>{ c.inflation=clamp(c.inflation-3,-2,40); c.growthTendency=clamp(c.growthTendency-0.6,-5,12); c.unrest=clamp(c.unrest+2,0,100); }},
 ];
 function checkInfluenceRisk(c, boosted){
   if(!c) return;
@@ -1307,6 +1410,213 @@ function resolveNegotiation(countryId, scenarioIdx, choiceIdx){
   recalcCountryInfluence(c);
   saveGame();
   return {ok:true};
+}
+
+/* =========================================================================
+   5c. DIPLOMACY, WAR & TERRITORY
+   Cross-country actions the player can take against/with another nation.
+   These operate on relationships (allies/enemies/tension) and, for war,
+   a running power comparison rather than a single deterministic check.
+   ========================================================================= */
+function relativePower(c){
+  const techAvg=(G.companies.filter(co=>co.country===c.id).reduce((a,co)=>a+co.tech,0))/Math.max(G.companies.filter(co=>co.country===c.id).length,1)||40;
+  return c.military*0.45 + Math.log10(Math.max(c.gdp,1))*8 + Math.log10(Math.max(c.population,1))*3 + techAvg*0.15;
+}
+function allyBonus(c){
+  return c.allies.reduce((a,id)=>{ const ally=G.countries.find(x=>x.id===id); return ally? a+relativePower(ally)*0.25 : a; },0);
+}
+function declareWar(fromId,toId){
+  const a=G.countries.find(x=>x.id===fromId), b=G.countries.find(x=>x.id===toId);
+  if(!a||!b) return {ok:false,msg:"国が見つかりません"};
+  if(a.war||b.war) return {ok:false,msg:"いずれかの国はすでに戦争状態です"};
+  a.war={targetId:b.id,startDay:G.day,ourScore:0,theirScore:0};
+  b.war={targetId:a.id,startDay:G.day,ourScore:0,theirScore:0};
+  a.enemies=[...new Set([...a.enemies,b.id])]; b.enemies=[...new Set([...b.enemies,a.id])];
+  a.allies=a.allies.filter(id=>id!==b.id); b.allies=b.allies.filter(id=>id!==a.id);
+  a.tension=100; b.tension=100;
+  pendingForceBackup=true;
+  pushNews("宣戦布告",`${a.flag}${a.name}が${b.flag}${b.name}に対して宣戦を布告した。世界情勢は緊迫している。`,"world",true);
+  addHistory(`${a.flag}${a.name}と${b.flag}${b.name}の間で戦争が始まった。`);
+  saveGame();
+  return {ok:true};
+}
+function resolveWarOutcome(winner,loser,decisive){
+  winner.war=null; loser.war=null;
+  winner.enemies=winner.enemies.filter(id=>id!==loser.id);
+  loser.enemies=loser.enemies.filter(id=>id!==winner.id);
+  winner.tension=clamp(winner.tension-30,0,100); loser.tension=clamp(loser.tension-30,0,100);
+  if(decisive){
+    const transfer=clamp(loser.territorySize*rand(0.15,0.3),1,loser.territorySize*0.4);
+    loser.territorySize=Math.max(5,loser.territorySize-transfer);
+    winner.territorySize+=transfer;
+    loser.happiness=clamp(loser.happiness-15,0,100); loser.gdp=Math.max(1,loser.gdp*0.9);
+    winner.happiness=clamp(winner.happiness+5,0,100);
+    pushNews("戦争終結",`${winner.flag}${winner.name}が${loser.flag}${loser.name}との戦争に勝利し、領土の一部を獲得した。`,"world",true);
+    addHistory(`${winner.flag}${winner.name}が${loser.flag}${loser.name}を降し、領土を獲得した。`);
+    if(loser.stability<15 && !loser.overlordId){
+      loser.overlordId=winner.id; winner.vassals=[...new Set([...winner.vassals,loser.id])];
+      pushNews("属国化",`${loser.flag}${loser.name}は敗戦の結果、${winner.flag}${winner.name}の属国となった。`,"world",true);
+      addHistory(`${loser.flag}${loser.name}が${winner.flag}${winner.name}の属国となった。`);
+    } else {
+      loser.politician=makePolitician(loser.name); loser.govSupport=rand(25,45);
+      pushNews("政権交代",`${loser.flag}${loser.name}で敗戦の責任を問われ、新政権「${loser.politician.name}」が発足した。`,"world");
+    }
+  } else {
+    pushNews("停戦",`${winner.flag}${winner.name}と${loser.flag}${loser.name}は停戦に合意した。領土の変更はない。`,"world",true);
+    addHistory(`${winner.flag}${winner.name}と${loser.flag}${loser.name}が停戦した。`);
+    winner.happiness=clamp(winner.happiness-3,0,100); loser.happiness=clamp(loser.happiness-3,0,100);
+  }
+  G.player.impact.crisesTriggered++;
+}
+function tickWar(country){
+  if(!country.war) return;
+  const enemy=G.countries.find(x=>x.id===country.war.targetId);
+  if(!enemy || !enemy.war){ country.war=null; return; }
+  const myPower=relativePower(country)+allyBonus(country);
+  const theirPower=relativePower(enemy)+allyBonus(enemy);
+  const swing=(myPower-theirPower)/Math.max(myPower+theirPower,1) + normRand()*0.08;
+  country.war.ourScore+=Math.max(0,swing);
+  country.war.theirScore+=Math.max(0,-swing);
+  country.gdpGrowth=clamp(country.gdpGrowth-0.4,-14,14);
+  country.happiness=clamp(country.happiness-0.15,0,100);
+  country.unrest=clamp(country.unrest+0.2,0,100);
+  const duration=G.day-country.war.startDay;
+  const gap=country.war.ourScore-country.war.theirScore;
+  if(Math.abs(gap)>4.5){
+    const winner = gap>0? country : enemy;
+    const loser = gap>0? enemy : country;
+    resolveWarOutcome(winner,loser,true);
+  } else if(duration>150){
+    resolveWarOutcome(country,enemy,false);
+  } else if(country.stability<10){
+    resolveWarOutcome(enemy,country,true);
+  }
+}
+function formAlliance(fromId,toId){
+  const a=G.countries.find(x=>x.id===fromId), b=G.countries.find(x=>x.id===toId);
+  if(!a||!b) return {ok:false,msg:"国が見つかりません"};
+  if(a.enemies.includes(b.id)) return {ok:false,msg:"交戦中の国とは同盟できません"};
+  if(a.allies.includes(b.id)) return {ok:false,msg:"すでに同盟関係にあります"};
+  a.allies=[...new Set([...a.allies,b.id])]; b.allies=[...new Set([...b.allies,a.id])];
+  a.tension=clamp(a.tension-15,0,100); b.tension=clamp(b.tension-15,0,100);
+  pushNews("同盟締結",`${a.flag}${a.name}と${b.flag}${b.name}が同盟を締結した。`,"world",true);
+  addHistory(`${a.flag}${a.name}と${b.flag}${b.name}が同盟を結んだ。`);
+  saveGame();
+  return {ok:true};
+}
+function imposeSanctions(fromId,toId){
+  const a=G.countries.find(x=>x.id===fromId), b=G.countries.find(x=>x.id===toId);
+  if(!a||!b) return {ok:false,msg:"国が見つかりません"};
+  b.gdpGrowth=clamp(b.gdpGrowth-1.5,-14,14);
+  b.inflation=clamp(b.inflation+1.5,-2,40);
+  b.tension=clamp(b.tension+20,0,100); a.tension=clamp(a.tension+10,0,100);
+  pushNews("経済制裁",`${a.flag}${a.name}が${b.flag}${b.name}に対して経済制裁を発動した。`,"world",true);
+  addHistory(`${a.flag}${a.name}が${b.flag}${b.name}に経済制裁を科した。`);
+  saveGame();
+  return {ok:true};
+}
+function tariffWar(fromId,toId){
+  const a=G.countries.find(x=>x.id===fromId), b=G.countries.find(x=>x.id===toId);
+  if(!a||!b) return {ok:false,msg:"国が見つかりません"};
+  [a,b].forEach(c=>{ Object.keys(c.resourceMod||{}).forEach(k=>c.resourceMod[k]=Math.min(2.2,c.resourceMod[k]*1.12)); c.inflation=clamp(c.inflation+0.6,-2,40); });
+  a.tension=clamp(a.tension+12,0,100); b.tension=clamp(b.tension+12,0,100);
+  pushNews("関税戦争",`${a.flag}${a.name}と${b.flag}${b.name}の間で関税の応酬が激化している。`,"world");
+  saveGame();
+  return {ok:true};
+}
+function militaryPressure(fromId,toId){
+  const a=G.countries.find(x=>x.id===fromId), b=G.countries.find(x=>x.id===toId);
+  if(!a||!b) return {ok:false,msg:"国が見つかりません"};
+  b.tension=clamp(b.tension+18,0,100); b.unrest=clamp(b.unrest+3,0,100);
+  a.military=clamp(a.military+2,0,100);
+  pushNews("軍事的圧力",`${a.flag}${a.name}が${b.flag}${b.name}との国境付近で軍を展開し、圧力をかけている。`,"world",true);
+  saveGame();
+  return {ok:true};
+}
+function vassalize(overlordId,targetId){
+  const o=G.countries.find(x=>x.id===overlordId), t=G.countries.find(x=>x.id===targetId);
+  if(!o||!t) return {ok:false,msg:"国が見つかりません"};
+  if(t.overlordId) return {ok:false,msg:"すでに他国の属国です"};
+  if(relativePower(o) < relativePower(t)*1.6) return {ok:false,msg:"国力差が不十分です（自国の実効国力が対象国の1.6倍以上必要）"};
+  t.overlordId=o.id; o.vassals=[...new Set([...o.vassals,t.id])];
+  t.tension=clamp(t.tension+10,0,100);
+  pushNews("属国化",`${o.flag}${o.name}が${t.flag}${t.name}を勢力圏に組み込み、属国とした。`,"world",true);
+  addHistory(`${o.flag}${o.name}が${t.flag}${t.name}を属国化した。`);
+  saveGame();
+  return {ok:true};
+}
+function releaseVassal(overlordId,targetId){
+  const o=G.countries.find(x=>x.id===overlordId), t=G.countries.find(x=>x.id===targetId);
+  if(!o||!t) return {ok:false,msg:"国が見つかりません"};
+  o.vassals=o.vassals.filter(id=>id!==t.id); t.overlordId=null;
+  pushNews("独立承認",`${o.flag}${o.name}が${t.flag}${t.name}の独立を承認した。`,"world");
+  addHistory(`${t.flag}${t.name}が${o.flag}${o.name}から独立した。`);
+  saveGame();
+  return {ok:true};
+}
+function takeDirectControl(countryId){
+  const c=G.countries.find(x=>x.id===countryId);
+  if(!c) return {ok:false,msg:"国が見つかりません"};
+  recalcCountryInfluence(c);
+  if(c.influence.total<90) return {ok:false,msg:"影響力90以上が必要です（現在 "+c.influence.total.toFixed(0)+"）"};
+  c.playerControlled=true;
+  pushNews("直接統治",`GLOBAL CAPITALが${c.flag}${c.name}政府の実権を掌握し、直接的な国家運営に乗り出した。`,"world",true);
+  addHistory(`GLOBAL CAPITALが${c.flag}${c.name}を直接統治下に置いた。`);
+  saveGame();
+  return {ok:true};
+}
+function releaseControl(countryId){
+  const c=G.countries.find(x=>x.id===countryId);
+  if(!c) return {ok:false,msg:"国が見つかりません"};
+  c.playerControlled=false;
+  pushNews("統治権の返還",`GLOBAL CAPITALが${c.flag}${c.name}の統治権を現地政府へ返還した。`,"world");
+  saveGame();
+  return {ok:true};
+}
+
+/* ---- AI nation autonomy ---- */
+function runAINationTurn(country){
+  if(country.playerControlled || country.collapsed) return;
+  const persona=country.aiPersona;
+  if(country.war){ return; } // war handled by tickWar every day already
+  const roll=Math.random();
+  if(roll<0.35){
+    // economic move
+    if(persona==='economic' || persona==='tech' || persona==='resource' || roll<0.12){
+      country.growthTendency=clamp(country.growthTendency+rand(0.05,0.25),-5,12);
+      if(persona==='tech'){ G.companies.filter(co=>co.country===country.id).forEach(co=>{ if(Math.random()<0.3) co.tech=clamp(co.tech+1,0,100); }); }
+      if(Math.random()<0.06) pushNews(`${country.name}の経済政策`,`${country.flag}${country.name}政府が産業振興策を発表した。`,'world');
+    }
+  } else if(roll<0.55){
+    // diplomatic move: seek alliance with a low-tension, non-enemy country
+    if(persona==='diplomatic' || persona==='peaceful' || persona==='defensive' || Math.random()<0.3){
+      const candidates=G.countries.filter(o=>o.id!==country.id && !country.allies.includes(o.id) && !country.enemies.includes(o.id) && !o.collapsed && (o.tension||50)<40);
+      if(candidates.length && Math.random()<0.15){
+        const partner=pick(candidates);
+        country.allies=[...new Set([...country.allies,partner.id])];
+        partner.allies=[...new Set([...partner.allies,country.id])];
+        if(Math.random()<0.4) pushNews("同盟締結",`${country.flag}${country.name}と${partner.flag}${partner.name}が同盟を締結した。`,'world');
+      }
+    }
+  } else if(roll<0.75){
+    // military build-up
+    if(persona==='aggressive' || persona==='expansionist' || Math.random()<0.2){
+      country.military=clamp(country.military+rand(0.3,1.2),0,100);
+    }
+  } else if(roll<0.85){
+    // resolve internal unrest (peaceful/defensive) or seek war target (aggressive/expansionist)
+    if(persona==='peaceful' || persona==='defensive'){
+      country.happiness=clamp(country.happiness+rand(0.2,0.6),0,100);
+      country.unrest=clamp(country.unrest-rand(0.2,0.6),0,100);
+    } else if((persona==='aggressive' || persona==='expansionist') && !country.war){
+      const rival=G.countries.find(x=>x.id===country.rivalId);
+      if(rival && !rival.war && !rival.collapsed && (country.tension>75 || rival.tension>75) && relativePower(country)>relativePower(rival)*1.3 && Math.random()<0.04){
+        declareWar(country.id, rival.id);
+      }
+    }
+  }
+  // slow tension decay toward neutral for peaceful/defensive personas
+  if(persona==='peaceful') country.tension=clamp(country.tension-0.1,0,100);
 }
 
 /* =========================================================================
@@ -1641,6 +1951,8 @@ function simulateDay(){
     c.politician.approval=clamp(c.politician.approval+(c.govSupport-c.politician.approval)*0.05+normRand()*0.2,0,100);
     recalcCountryInfluence(c);
     checkInfluenceRisk(c, false);
+    if(c.war) tickWar(c);
+    else if(Math.random()<0.15) runAINationTurn(c);
     updateCountryStability(c,1);
   });
 
@@ -3140,43 +3452,83 @@ function renderNews(){
 /* =========================================================================
    22. PEOPLE SCREEN
    ========================================================================= */
+const NATION_TABS=[
+ {key:'overview',label:'概要'},{key:'economy',label:'経済'},{key:'military',label:'軍事'},
+ {key:'diplomacy',label:'外交'},{key:'domestic',label:'内政'},{key:'policy',label:'政策'},
+ {key:'territory',label:'領土'},{key:'corp',label:'企業'},{key:'people',label:'国民'},
+ {key:'voices',label:'市民の声'},{key:'history',label:'歴史'},
+];
 function renderPeople(){
   const el=document.getElementById('screen-people');
   if(!G.uiCountry) G.uiCountry=G.countries[0].id;
   const country=G.countries.find(c=>c.id===G.uiCountry)||G.countries[0];
   recalcCountryInfluence(country);
-  const cached=G.voiceViewCache[country.id];
-  const needFresh = !cached || (cached.source==='template' && (G.day-cached.day)>=7);
-  if(needFresh){ G.voiceViewCache[country.id]={source:'template', voices:generateVoices(country,6), day:G.day}; }
-  const voiceState=G.voiceViewCache[country.id];
-  const inf=country.influence;
-  const pol=country.politician;
-  const eligiblePolicies=POLICIES;
   el.innerHTML=`
     <div class="panel">
-      <div class="panel-title">WORLD PEOPLE</div>
+      <div class="panel-title">NATION<span class="dim">${country.playerControlled?'直接統治中':''}</span></div>
       <select id="country-select">
-        ${G.countries.map(c=>`<option value="${c.id}" ${c.id===G.uiCountry?'selected':''}>${c.flag} ${c.name}${c.collapsed?'（崩壊）':c.conflict?'（紛争）':''}</option>`).join('')}
+        ${G.countries.map(c=>`<option value="${c.id}" ${c.id===G.uiCountry?'selected':''}>${c.flag} ${c.name}${c.collapsed?'（崩壊）':c.war?'（交戦中）':c.conflict?'（紛争）':c.playerControlled?'（統治中）':''}</option>`).join('')}
       </select>
+      <div class="chip-select scroll" id="nation-tabs" style="margin-top:10px;">
+        ${NATION_TABS.map(t=>`<button data-t="${t.key}" class="${G.uiNationTab===t.key?'active':''}">${t.label}</button>`).join('')}
+      </div>
     </div>
+    <div id="nation-tab-body"></div>
+  `;
+  document.getElementById('country-select').addEventListener('change',e=>{ G.uiCountry=e.target.value; renderPeople(); });
+  document.getElementById('nation-tabs').addEventListener('click',e=>{
+    const b=e.target.closest('button[data-t]'); if(!b) return;
+    G.uiNationTab=b.dataset.t; renderPeople();
+  });
+  const body=document.getElementById('nation-tab-body');
+  const renderers={overview:nationOverview,economy:nationEconomy,military:nationMilitary,diplomacy:nationDiplomacy,
+    domestic:nationDomestic,policy:nationPolicy,territory:nationTerritory,corp:nationCorp,people:nationPeople,
+    voices:nationVoices,history:nationHistory};
+  const fn=renderers[G.uiNationTab]||nationOverview;
+  body.innerHTML=fn(country);
+  wireCommon(el);
+  wireNationTab(G.uiNationTab, country, el);
+}
+
+function statusBanners(country){
+  let html='';
+  if(country.collapsed) html+=`<div class="tag warn" style="margin-bottom:8px;">国家崩壊状態（復興まで残り約${Math.ceil(country.collapseRemaining)}日）</div>`;
+  if(country.conflict) html+=`<div class="tag warn" style="margin-bottom:8px;">${country.conflict.name}（残り約${Math.ceil(country.conflict.remaining)}日）</div>`;
+  if(country.war){ const e=G.countries.find(x=>x.id===country.war.targetId); html+=`<div class="tag warn" style="margin-bottom:8px;">⚔ ${e?e.flag+e.name:'他国'}と交戦中（開戦から${G.day-country.war.startDay}日）</div>`; }
+  if(country.overlordId){ const o=G.countries.find(x=>x.id===country.overlordId); html+=`<div class="tag info" style="margin-bottom:8px;">${o?o.flag+o.name:'他国'}の属国</div>`; }
+  return html;
+}
+
+function nationOverview(country){
+  const inf=country.influence;
+  return `
     <div class="panel">
       <div class="panel-title">${country.flag} ${country.name}</div>
-      ${country.collapsed?`<div class="tag warn" style="margin-bottom:8px;">国家崩壊状態（復興まで残り約${Math.ceil(country.collapseRemaining)}日）</div>`:''}
-      ${country.conflict?`<div class="tag warn" style="margin-bottom:8px;">${country.conflict.name}（残り約${Math.ceil(country.conflict.remaining)}日）</div>`:''}
+      ${statusBanners(country)}
       <div class="grid3">
         <div class="metric-box"><div class="lbl">人口</div><div class="val">${(country.population/10000).toFixed(country.population>10000?1:2)}億人</div></div>
         <div class="metric-box"><div class="lbl">幸福度</div><div class="val ${country.happiness>55?'teal':country.happiness<40?'red':''}">${country.happiness.toFixed(0)}</div></div>
         <div class="metric-box"><div class="lbl">政情安定度</div><div class="val ${country.stability>60?'teal':country.stability<30?'red':''}">${country.stability.toFixed(0)}</div></div>
-        <div class="metric-box"><div class="lbl">物価不満</div><div class="val">${clamp(country.inflation*10,0,100).toFixed(0)}</div></div>
-        <div class="metric-box"><div class="lbl">失業不安</div><div class="val">${clamp(country.unemployment*6,0,100).toFixed(0)}</div></div>
         <div class="metric-box"><div class="lbl">政府支持率</div><div class="val">${country.govSupport.toFixed(0)}%</div></div>
         <div class="metric-box"><div class="lbl">社会不安</div><div class="val ${country.unrest>50?'red':''}">${country.unrest.toFixed(0)}</div></div>
-        <div class="metric-box"><div class="lbl">貧困率</div><div class="val">${country.poverty.toFixed(0)}%</div></div>
-        <div class="metric-box"><div class="lbl">対プレイヤー緊張度</div><div class="val ${country.tension>60?'red':''}">${(country.tension||0).toFixed(0)}</div></div>
         <div class="metric-box"><div class="lbl">プレイヤー評価</div><div class="val ${country.approval>55?'teal':country.approval<40?'red':''}">${country.approval.toFixed(0)}</div></div>
       </div>
     </div>
-
+    <div class="panel">
+      <div class="panel-title">CONTROL NATION<span class="dim">国家操作</span></div>
+      ${country.playerControlled?`
+        <div class="tag control" style="margin-bottom:8px;">操作中</div>
+        <div class="row-sub">この国はGLOBAL CAPITALの直接統治下にあります。軍事・外交・内政タブから方針を指示できます。</div>
+        <button class="btn ghost block" id="btn-release-control" style="margin-top:10px;">統治権を返還する</button>
+      `: inf.total>=90 ? `
+        <div class="tag info" style="margin-bottom:8px;">操作可能</div>
+        <div class="row-sub">影響力が90に到達しました。この国を直接統治下に置くことができます。</div>
+        <button class="btn primary block" id="btn-take-control" style="margin-top:10px;">この国を直接統治する</button>
+      ` : `
+        <div class="tag" style="margin-bottom:8px;">AI操作</div>
+        <div class="row-sub">この国はAI（性格：${(AI_PERSONAS.find(p=>p.key===country.aiPersona)||{}).label||country.aiPersona}）が自律的に運営しています。影響力90以上で直接統治が可能になります（現在 ${inf.total.toFixed(0)}）。</div>
+      `}
+    </div>
     <div class="panel">
       <div class="panel-title">PLAYER INFLUENCE<span class="dim">政府への影響力</span></div>
       <div class="gauge-wrap">
@@ -3188,17 +3540,116 @@ function renderPeople(){
           <defs><linearGradient id="pg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#9C8CF0"/><stop offset="100%" stop-color="#E8B84B"/></linearGradient></defs>
           <text x="36" y="41" text-anchor="middle" font-family="IBM Plex Mono" font-size="17" fill="#E7ECF3" font-weight="600">${inf.total.toFixed(0)}</text>
         </svg>
-        <div class="gauge-desc">${influenceTierLabel(inf.total)}<br>経済・企業・メディア・政策活動の4つの経路から積み上がる。現金を払うだけでは上がらない。</div>
+        <div class="gauge-desc">${influenceTierLabel(inf.total)}<br>経済・企業・メディア・政策活動の4つの経路から積み上がる。</div>
       </div>
-      <div style="margin-top:10px;">
-        ${[["経済影響",inf.econ],["企業影響",inf.corp],["メディア影響",inf.media],["政策活動",inf.policy]].map(([label,v])=>`
-          <div style="margin-bottom:7px;">
-            <div class="flex-between"><span class="row-sub">${label}</span><span class="mono" style="font-size:11px;">${v.toFixed(0)}</span></div>
-            <div class="pillbar"><div style="width:${v}%;background:var(--purple);"></div></div>
-          </div>
-        `).join('')}
+    </div>
+  `;
+}
+function nationEconomy(country){
+  return `
+    <div class="panel">
+      <div class="panel-title">${country.flag} ${country.name} — 経済</div>
+      <div class="grid3">
+        <div class="metric-box"><div class="lbl">GDP</div><div class="val">${fmtYen(country.gdp)}</div></div>
+        <div class="metric-box"><div class="lbl">成長率</div><div class="val ${country.gdpGrowth>=0?'teal':'red'}">${country.gdpGrowth.toFixed(1)}%</div></div>
+        <div class="metric-box"><div class="lbl">インフレ率</div><div class="val">${country.inflation.toFixed(1)}%</div></div>
+        <div class="metric-box"><div class="lbl">政策金利</div><div class="val">${country.rate.toFixed(2)}%</div></div>
+        <div class="metric-box"><div class="lbl">法人税率</div><div class="val">${country.taxRate.toFixed(0)}%</div></div>
+        <div class="metric-box"><div class="lbl">失業率</div><div class="val">${country.unemployment.toFixed(1)}%</div></div>
       </div>
       <hr class="sep">
+      <div class="flex-between"><span class="row-sub">経済影響力</span><span class="mono" style="font-size:11px;">${country.influence.econ.toFixed(0)}</span></div>
+      <div class="pillbar"><div style="width:${country.influence.econ}%;background:var(--purple);"></div></div>
+      <div class="row-sub" style="margin-top:8px;">インフラ投資累計：${fmtYen(country.infraInvested||0)}（「買収」タブの国家投資から追加できます）</div>
+    </div>
+  `;
+}
+function nationMilitary(country){
+  const myPower=relativePower(country);
+  return `
+    <div class="panel">
+      <div class="panel-title">${country.flag} ${country.name} — 軍事</div>
+      <div class="grid3">
+        <div class="metric-box"><div class="lbl">軍事力指数</div><div class="val">${country.military.toFixed(0)}</div></div>
+        <div class="metric-box"><div class="lbl">国防予算比率</div><div class="val">${country.militaryBudgetRate.toFixed(1)}%</div></div>
+        <div class="metric-box"><div class="lbl">実効国力指数</div><div class="val gold">${myPower.toFixed(0)}</div></div>
+      </div>
+      ${country.war?`
+        <hr class="sep">
+        <div class="row-title red">⚔ 交戦中</div>
+        <div class="row-sub">相手: ${(()=>{const e=G.countries.find(x=>x.id===country.war.targetId);return e?e.flag+e.name:'';})()}</div>
+        <div class="row-sub">戦況スコア ${country.war.ourScore.toFixed(1)} － ${country.war.theirScore.toFixed(1)}</div>
+      `:''}
+      <hr class="sep">
+      <label class="field-label">軍事支援額（兆円） ・ 現金 ${fmtYen(G.player.cash)}</label>
+      <input type="number" id="military-amount" min="0" step="1" value="5"/>
+      <button class="btn ghost block" id="btn-military-support" style="margin-top:8px;">軍事支援を行う（軍事力を強化）</button>
+    </div>
+  `;
+}
+function nationDiplomacy(country){
+  const others=G.countries.filter(c=>c.id!==country.id && !c.collapsed);
+  const allyNames=country.allies.map(id=>{ const c=G.countries.find(x=>x.id===id); return c?`${c.flag}${c.name}`:''; }).filter(Boolean);
+  const enemyNames=country.enemies.map(id=>{ const c=G.countries.find(x=>x.id===id); return c?`${c.flag}${c.name}`:''; }).filter(Boolean);
+  const rival=G.countries.find(x=>x.id===country.rivalId);
+  const targetId=G.uiDiploTarget && others.some(o=>o.id===G.uiDiploTarget) ? G.uiDiploTarget : (others[0]?others[0].id:null);
+  return `
+    <div class="panel">
+      <div class="panel-title">${country.flag} ${country.name} — 外交</div>
+      <div class="grid3">
+        <div class="metric-box"><div class="lbl">対プレイヤー緊張度</div><div class="val ${country.tension>60?'red':''}">${(country.tension||0).toFixed(0)}</div></div>
+        <div class="metric-box"><div class="lbl">同盟国数</div><div class="val teal">${country.allies.length}</div></div>
+        <div class="metric-box"><div class="lbl">敵対国数</div><div class="val red">${country.enemies.length}</div></div>
+      </div>
+      <div class="row-sub" style="margin-top:8px;">ライバル国：${rival?rival.flag+rival.name:'なし'}</div>
+      <div class="row-sub">同盟：${allyNames.join('、')||'なし'}</div>
+      <div class="row-sub">敵対：${enemyNames.join('、')||'なし'}</div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">対他国アクション</div>
+      <label class="field-label">対象国</label>
+      <select id="diplo-target">${others.map(o=>`<option value="${o.id}" ${o.id===targetId?'selected':''}>${o.flag} ${o.name}</option>`).join('')}</select>
+      <div class="btn-row" style="margin-top:10px;flex-wrap:wrap;gap:8px;">
+        <button class="btn ghost btn-sm" data-diplo="alliance">同盟締結</button>
+        <button class="btn ghost btn-sm" data-diplo="sanction">経済制裁</button>
+        <button class="btn ghost btn-sm" data-diplo="tariff">関税戦争</button>
+        <button class="btn ghost btn-sm" data-diplo="pressure">軍事的圧力</button>
+        <button class="btn danger btn-sm" data-diplo="war">宣戦布告</button>
+      </div>
+    </div>
+  `;
+}
+function nationDomestic(country){
+  const domesticPolicies=POLICIES.filter(p=>p.category==='内政');
+  return `
+    <div class="panel">
+      <div class="panel-title">${country.flag} ${country.name} — 内政</div>
+      <div class="grid3">
+        <div class="metric-box"><div class="lbl">幸福度</div><div class="val ${country.happiness>55?'teal':'red'}">${country.happiness.toFixed(0)}</div></div>
+        <div class="metric-box"><div class="lbl">社会不安</div><div class="val ${country.unrest>50?'red':''}">${country.unrest.toFixed(0)}</div></div>
+        <div class="metric-box"><div class="lbl">貧困率</div><div class="val">${country.poverty.toFixed(0)}%</div></div>
+        <div class="metric-box"><div class="lbl">格差指数</div><div class="val">${country.inequality.toFixed(0)}</div></div>
+        <div class="metric-box"><div class="lbl">物価不満</div><div class="val">${clamp(country.inflation*10,0,100).toFixed(0)}</div></div>
+        <div class="metric-box"><div class="lbl">失業不安</div><div class="val">${clamp(country.unemployment*6,0,100).toFixed(0)}</div></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">内政政策</div>
+      ${domesticPolicies.map(p=>{
+        const locked=country.influence.total<p.minInfluence;
+        return `<div class="row"><div class="row-main"><div class="row-title">${escapeHtml(p.name)}</div>
+        <div class="row-sub">${escapeHtml(p.desc)}</div><div class="row-sub">必要影響力 ${p.minInfluence} ・ コスト ${fmtYen(p.cost)}</div></div>
+        <div class="row-right"><button class="btn ${locked?'ghost':'primary'} btn-sm" data-propose="${p.id}" ${locked?'disabled':''}>提案</button></div></div>`;
+      }).join('')}
+    </div>
+  `;
+}
+function nationPolicy(country){
+  const inf=country.influence;
+  const pol=country.politician;
+  const cats=['経済','産業','貿易','インフラ','内政'];
+  return `
+    <div class="panel">
       <div class="flex-between">
         <div>
           <div class="row-title">${pol.name}（${pol.title}）</div>
@@ -3210,58 +3661,185 @@ function renderPeople(){
       <button class="btn ghost block" id="btn-lobby" style="margin-top:8px;">ロビー活動を実施</button>
       ${inf.total>=75?`<button class="btn primary block" id="btn-negotiate" style="margin-top:8px;">非公開交渉を持ちかける</button>`:`<div class="row-sub" style="margin-top:8px;">影響力75以上で非公開交渉が可能になります。</div>`}
     </div>
-
+    ${cats.map(cat=>`
+      <div class="panel">
+        <div class="panel-title">${cat}政策</div>
+        ${POLICIES.filter(p=>p.category===cat).map(p=>{
+          const locked=inf.total<p.minInfluence;
+          return `<div class="row">
+            <div class="row-main">
+              <div class="row-title">${escapeHtml(p.name)}</div>
+              <div class="row-sub">${escapeHtml(p.desc)}</div>
+              <div class="row-sub">必要影響力 ${p.minInfluence} ・ コスト ${fmtYen(p.cost)}</div>
+            </div>
+            <div class="row-right"><button class="btn ${locked?'ghost':'primary'} btn-sm" data-propose="${p.id}" ${locked?'disabled':''}>提案</button></div>
+          </div>`;
+        }).join('')}
+      </div>
+    `).join('')}
+  `;
+}
+function nationTerritory(country){
+  const vassalNames=country.vassals.map(id=>{ const c=G.countries.find(x=>x.id===id); return c?c:null; }).filter(Boolean);
+  const overlord=country.overlordId?G.countries.find(x=>x.id===country.overlordId):null;
+  const candidates=G.countries.filter(c=>c.id!==country.id && !c.collapsed && !c.overlordId);
+  return `
     <div class="panel">
-      <div class="panel-title">政策提案</div>
-      ${eligiblePolicies.map(p=>{
-        const locked=inf.total<p.minInfluence;
-        return `<div class="row">
-          <div class="row-main">
-            <div class="row-title">${escapeHtml(p.name)} <span class="tag ${locked?'warn':'info'}">${p.category}</span></div>
-            <div class="row-sub">${escapeHtml(p.desc)}</div>
-            <div class="row-sub">必要影響力 ${p.minInfluence} ・ コスト ${fmtYen(p.cost)}</div>
-          </div>
-          <div class="row-right"><button class="btn ${locked?'ghost':'primary'} btn-sm" data-propose="${p.id}" ${locked?'disabled':''}>提案</button></div>
+      <div class="panel-title">${country.flag} ${country.name} — 領土</div>
+      <div class="grid2">
+        <div class="metric-box"><div class="lbl">領土規模指数</div><div class="val gold">${country.territorySize.toFixed(0)}</div></div>
+        <div class="metric-box"><div class="lbl">属国数</div><div class="val">${vassalNames.length}</div></div>
+      </div>
+      ${overlord?`<div class="row-sub" style="margin-top:8px;">この国は${overlord.flag}${overlord.name}の属国です。</div>`:''}
+      ${vassalNames.length?`<div class="section-label">属国</div>${vassalNames.map(v=>`<div class="row"><div class="row-main row-title">${v.flag} ${v.name}</div><div class="row-right"><button class="btn ghost btn-sm" data-release-vassal="${v.id}">独立を承認</button></div></div>`).join('')}`:''}
+    </div>
+    <div class="panel">
+      <div class="panel-title">属国化</div>
+      <div class="row-sub" style="margin-bottom:8px;">対象国の実効国力の1.6倍以上の国力が必要です。戦争や急激な弱体化の後は成功しやすくなります。</div>
+      <select id="vassalize-target">${candidates.map(c=>`<option value="${c.id}">${c.flag} ${c.name}</option>`).join('')}</select>
+      <button class="btn ghost block" id="btn-vassalize" style="margin-top:8px;">属国化を試みる</button>
+    </div>
+  `;
+}
+function nationCorp(country){
+  const comps=G.companies.filter(c=>c.country===country.id).sort((a,b)=>b.marketCap-a.marketCap);
+  return `
+    <div class="panel">
+      <div class="panel-title">${country.flag} ${country.name} — 企業<span class="dim">${comps.length}社</span></div>
+      ${comps.map(co=>{
+        const pct=ownershipPct(co);
+        return `<div class="row" data-open-company="${co.id}">
+          <div class="row-main"><div class="row-title">${escapeHtml(co.name)} ${pct>=50?'<span class="tag control">支配</span>':pct>0?'<span class="tag owned">保有</span>':''}</div>
+          <div class="row-sub">${co.sector} ・ ${fmtYen(co.marketCap)}</div></div>
+          <div class="row-right row-val">${fmtPrice(co.price)}</div>
         </div>`;
       }).join('')}
     </div>
-
+  `;
+}
+function nationPeople(country){
+  return `
     <div class="panel">
-      <div class="panel-title">市民の声<button class="btn ghost" id="btn-ai-voice" style="font-size:11px;padding:6px 10px;">✨ AIで生成</button></div>
-      <div id="voice-list">
-        ${voiceState.voices.map(v=>`<div class="voice-card"><div class="voice-role">${escapeHtml(v.role)}${voiceState.source==='ai'?' <span class="dim" style="font-weight:400;">AI生成</span>':''}</div><div class="voice-text">${escapeHtml(v.text)}</div></div>`).join('')}
+      <div class="panel-title">${country.flag} ${country.name} — 国民</div>
+      <div class="grid3">
+        <div class="metric-box"><div class="lbl">人口</div><div class="val">${(country.population/10000).toFixed(country.population>10000?1:2)}億人</div></div>
+        <div class="metric-box"><div class="lbl">政府支持率</div><div class="val">${country.govSupport.toFixed(0)}%</div></div>
+        <div class="metric-box"><div class="lbl">プレイヤー評価</div><div class="val ${country.approval>55?'teal':country.approval<40?'red':''}">${country.approval.toFixed(0)}</div></div>
+        <div class="metric-box"><div class="lbl">幸福度</div><div class="val">${country.happiness.toFixed(0)}</div></div>
+        <div class="metric-box"><div class="lbl">社会不安</div><div class="val">${country.unrest.toFixed(0)}</div></div>
+        <div class="metric-box"><div class="lbl">貧困率</div><div class="val">${country.poverty.toFixed(0)}%</div></div>
       </div>
     </div>
   `;
-  wireCommon(el);
-  document.getElementById('country-select').addEventListener('change',e=>{ G.uiCountry=e.target.value; renderPeople(); });
-  document.getElementById('btn-lobby').addEventListener('click',()=>{
-    const amt=parseFloat(document.getElementById('lobby-amount').value)||0;
-    const r=lobbyActivity(country.id,amt);
-    if(r.ok){ toast("ロビー活動を実施しました"); renderAll(); } else toast(r.msg);
+}
+function nationVoices(country){
+  const cache=G.voiceViewCache[country.id];
+  const history=(cache&&cache.history)||[];
+  const latest=history[0];
+  return `
+    <div class="panel">
+      <div class="panel-title">市民の声</div>
+      <div class="row-sub">現在の国民感情：幸福度 ${country.happiness.toFixed(0)} ・ 不満度（社会不安） ${country.unrest.toFixed(0)}</div>
+      <button class="btn primary block" id="btn-load-voice" style="margin-top:10px;">市民の声をロード</button>
+    </div>
+    <div class="panel" id="voice-list-panel">
+      ${latest? latest.voices.map(v=>`<div class="voice-card"><div class="voice-role">${escapeHtml(v.role)}${latest.source==='ai'?' <span class="dim" style="font-weight:400;">AI生成</span>':''}</div><div class="voice-text">${escapeHtml(v.text)}</div></div>`).join('')
+        : `<div class="empty-state">まだ市民の声をロードしていません。上のボタンから最新の声を取得できます。</div>`}
+    </div>
+    ${history.length>1?`
+    <div class="panel">
+      <div class="panel-title">過去の声<span class="dim">${history.length-1}件</span></div>
+      ${history.slice(1,8).map(h=>`<div class="row"><div class="row-main"><div class="row-sub">DAY ${h.day} ・ ${h.source==='ai'?'AI生成':'簡易生成'}</div><div class="row-sub" style="margin-top:2px;">${escapeHtml(h.voices[0]?.text||'')}</div></div></div>`).join('')}
+    </div>`:''}
+  `;
+}
+function nationHistory(country){
+  const items=G.history.filter(h=>h.text.includes(country.name));
+  if(!items.length) return `<div class="panel"><div class="empty-state">この国に関する歴史的な出来事はまだありません。</div></div>`;
+  let html=`<div class="panel"><div class="panel-title">${country.flag} ${country.name} — 歴史</div>`;
+  let lastYear=null;
+  items.forEach(h=>{
+    if(h.year!==lastYear){ html+=`<div class="tl-year">${h.year}年</div>`; lastYear=h.year; }
+    html+=`<div class="tl-item"><div class="tl-dot"></div><div class="tl-text">${escapeHtml(h.text)}</div></div>`;
   });
-  const negoBtn=document.getElementById('btn-negotiate');
-  if(negoBtn) negoBtn.addEventListener('click',()=>openNegotiationModal(country.id));
-  el.querySelectorAll('[data-propose]').forEach(b=>b.addEventListener('click',()=>{
-    const r=proposePolicy(country.id,b.dataset.propose);
-    if(r.ok){ openPolicyResultModal(r); renderAll(); } else toast(r.msg);
-  }));
-  document.getElementById('btn-ai-voice').addEventListener('click', async ()=>{
-    const btn=document.getElementById('btn-ai-voice');
-    const list=document.getElementById('voice-list');
-    btn.disabled=true; btn.textContent="生成中…";
-    list.innerHTML=`<div class="loading-dots">AIが${country.name}の国民の声を生成しています…</div>`;
-    try{
-      const aiVoices=await generateAIVoices(country);
-      G.voiceViewCache[country.id]={source:'ai', voices:aiVoices, day:G.day};
-      list.innerHTML=aiVoices.map(v=>`<div class="voice-card"><div class="voice-role">${escapeHtml(v.role)} <span class="dim" style="font-weight:400;">AI生成</span></div><div class="voice-text">${escapeHtml(v.text)}</div></div>`).join('');
-    }catch(err){
-      console.error(err);
-      list.innerHTML=`<div class="empty-state">AI生成に失敗しました。通信環境をご確認のうえ再度お試しください。</div>`;
-      toast("AI生成に失敗しました");
-    }
-    btn.disabled=false; btn.textContent="✨ AIで生成";
-  });
+  html+=`</div>`;
+  return html;
+}
+function wireNationTab(tab, country, el){
+  if(tab==='overview'){
+    const takeBtn=document.getElementById('btn-take-control');
+    if(takeBtn) takeBtn.addEventListener('click',()=>{ const r=takeDirectControl(country.id); if(r.ok){ toast('直接統治を開始しました'); renderAll(); } else toast(r.msg); });
+    const relBtn=document.getElementById('btn-release-control');
+    if(relBtn) relBtn.addEventListener('click',()=>{ const r=releaseControl(country.id); if(r.ok){ toast('統治権を返還しました'); renderAll(); } else toast(r.msg); });
+  } else if(tab==='military'){
+    document.getElementById('btn-military-support').addEventListener('click',()=>{
+      const amt=parseFloat(document.getElementById('military-amount').value)||0;
+      if(amt<=0){ toast('金額を入力してください'); return; }
+      if(amt>G.player.cash){ toast('資金が不足しています'); return; }
+      G.player.cash-=amt; country.military=clamp(country.military+amt*0.8,0,100);
+      G.player.impact.totalInvested+=amt;
+      pushNews("軍事支援",`GLOBAL CAPITALが${country.flag}${country.name}へ軍事支援を行った。`,'world');
+      saveGame(); toast('軍事支援を行いました'); renderAll();
+    });
+  } else if(tab==='diplomacy'){
+    document.getElementById('diplo-target').addEventListener('change',e=>{ G.uiDiploTarget=e.target.value; });
+    el.querySelectorAll('[data-diplo]').forEach(b=>b.addEventListener('click',()=>{
+      const targetId=document.getElementById('diplo-target').value;
+      const action=b.dataset.diplo;
+      let r;
+      if(action==='alliance') r=formAlliance(country.id,targetId);
+      else if(action==='sanction') r=imposeSanctions(country.id,targetId);
+      else if(action==='tariff') r=tariffWar(country.id,targetId);
+      else if(action==='pressure') r=militaryPressure(country.id,targetId);
+      else if(action==='war'){ if(!confirm('本当に宣戦布告しますか？')) return; r=declareWar(country.id,targetId); }
+      if(r&&r.ok){ toast('実行しました'); renderAll(); } else if(r) toast(r.msg);
+    }));
+  } else if(tab==='domestic' || tab==='policy'){
+    document.getElementById('btn-lobby')?.addEventListener('click',()=>{
+      const amt=parseFloat(document.getElementById('lobby-amount').value)||0;
+      const r=lobbyActivity(country.id,amt);
+      if(r.ok){ toast("ロビー活動を実施しました"); renderAll(); } else toast(r.msg);
+    });
+    document.getElementById('btn-negotiate')?.addEventListener('click',()=>openNegotiationModal(country.id));
+    el.querySelectorAll('[data-propose]').forEach(b=>b.addEventListener('click',()=>{
+      const r=proposePolicy(country.id,b.dataset.propose);
+      if(r.ok){ openPolicyResultModal(r); renderAll(); } else toast(r.msg);
+    }));
+  } else if(tab==='territory'){
+    document.getElementById('btn-vassalize').addEventListener('click',()=>{
+      const targetId=document.getElementById('vassalize-target').value;
+      const r=vassalize(country.id,targetId);
+      if(r.ok){ toast('属国化しました'); renderAll(); } else toast(r.msg);
+    });
+    el.querySelectorAll('[data-release-vassal]').forEach(b=>b.addEventListener('click',()=>{
+      const r=releaseVassal(country.id,b.dataset.releaseVassal);
+      if(r.ok){ toast('独立を承認しました'); renderAll(); } else toast(r.msg);
+    }));
+  } else if(tab==='voices'){
+    document.getElementById('btn-load-voice').addEventListener('click', async ()=>{
+      const btn=document.getElementById('btn-load-voice');
+      const panel=document.getElementById('voice-list-panel');
+      btn.disabled=true; btn.textContent="ロード中…";
+      panel.innerHTML=`<div class="loading-dots">AIが${country.name}の国民の声を生成しています…</div>`;
+      let entry;
+      try{
+        const aiVoices=await generateAIVoices(country);
+        entry={day:G.day, source:'ai', voices:aiVoices};
+      }catch(err){
+        console.error(err);
+        entry={day:G.day, source:'template', voices:generateVoices(country,6)};
+        toast("AI生成に失敗したため簡易生成を表示しています");
+      }
+      const cache=G.voiceViewCache[country.id]||{history:[]};
+      cache.history=cache.history||[];
+      cache.history.unshift(entry);
+      if(cache.history.length>20) cache.history.pop();
+      G.voiceViewCache[country.id]=cache;
+      saveGame();
+      btn.disabled=false; btn.textContent="市民の声をロード";
+      renderAll();
+    });
+  }
 }
 function influenceTierLabel(v){
   if(v>=90) return "国家レベルの極めて強い影響力";
