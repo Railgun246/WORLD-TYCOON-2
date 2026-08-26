@@ -264,6 +264,12 @@ hr.sep{border:none;border-top:1px solid var(--border);margin:12px 0;}
 .tut-skip{background:none;border:none;color:var(--dim);font-size:11px;text-decoration:underline;padding:6px;}
 .tut-summary-table{width:100%;max-width:440px;margin:18px 0;text-align:left;}
 .tut-summary-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:12.5px;}
+#boot-screen{
+  position:fixed;inset:0;z-index:99;
+  background:radial-gradient(circle at 50% 30%, rgba(20,26,36,0.99), rgba(4,5,8,1));
+  display:flex;flex-direction:column;align-items:center;
+  padding:56px 26px;text-align:center;overflow-y:auto;
+}
 </style>
 </head>
 <body>
@@ -317,6 +323,7 @@ hr.sep{border:none;border-top:1px solid var(--border);margin:12px 0;}
 
   <div class="toast" id="toast"></div>
   <div id="tutorial-overlay" style="display:none;"></div>
+  <div id="boot-screen" style="display:none;"></div>
 </div>
 
 <script>
@@ -388,6 +395,12 @@ const MINOR_COUNTRIES=[
 const MINOR_INDUSTRIES=["製造","農業","観光","金融","エネルギー","物流","建設"];
 const RIVAL_MAP={"アメリカ":"中国","中国":"アメリカ","日本":"中国","韓国":"日本","台湾":"中国","インド":"中国",
  "イギリス":"ロシア","ドイツ":"ロシア","フランス":"ロシア","ロシア":"アメリカ","サウジアラビア":"UAE","UAE":"サウジアラビア"};
+const POLITICIAN_SURNAMES=["ハラダ","ウォーカー","チェン","キム","シン","ムーア","ベルナール","シュミット","ロッシ","ガルシア","イワノフ","アルサバ","ンコシ","タン"];
+const POLITICIAN_TITLES_PRESIDENTIAL=new Set(["アメリカ","フランス","ロシア","ブラジル","メキシコ","インドネシア","アルゼンチン","トルコ","韓国","南アフリカ","エジプト","ナイジェリア"]);
+function makePolitician(countryName){
+  const title = POLITICIAN_TITLES_PRESIDENTIAL.has(countryName) ? "大統領" : "首相";
+  return { name:`${pick(POLITICIAN_SURNAMES)}${title}`, title, approval:rand(38,62), relation:50 };
+}
 
 const SECTOR_SUFFIX={
  "IT":["システムズ","テクノロジーズ","ソフトウェア","デジタル"],
@@ -482,12 +495,10 @@ const FOUNDABLE_SECTORS=["AI","半導体","自動車","エネルギー","金融"
    2. GAME STATE
    ========================================================================= */
 let G=null;
-const SAVE_KEY="wt_save_v2";
-const SAVE_KEY_OLD="wt_save_v1";
 
 function freshState(){
   return {
-    version:2,
+    version:CURRENT_SAVE_VERSION,
     startedAt:Date.now(),
     day:0,
     playing:false,
@@ -508,13 +519,16 @@ function freshState(){
       recentActions:[],
       impact:{totalInvested:0,jobsCreated:0,jobsLost:0,crisesTriggered:0,nationsCollapsed:0,nationsSaved:0,companiesFounded:0},
       milestones:{power:[]},
+      playTimeSeconds:0,
     },
     macro:{ oilPrice:100, globalSentiment:0, globalRate:3.5, bubbleRisk:0, tradeMomentum:0 },
     crisis:null,
-    news:[], sns:[], voiceLog:{},
+    news:[], sns:[], voiceLog:{}, voiceViewCache:{},
     debug:false,
     uiCountry:null, uiSector:"all", uiMarketFilter:"all",
     uiWorldTab:"overview", uiBizTab:"holdings", uiMnaTab:"company", uiChartTf:"day",
+    uiInfraCountry:null, uiResResource:"oil", uiResCountry:null,
+    uiFoundCountry:null, uiFoundSector:"AI", uiFoundTier:"small",
     tutorial:{active:false, step:0, flags:{}, novaId:null, struggleId:null, skipped:false, completed:false, startSnapshot:null},
   };
 }
@@ -531,8 +545,10 @@ function initWorld(){
       inequality:rand(28,55), poverty:rand(5,22), approval:50,
       taxRate:rand(18,32), stability:rand(60,85), tension:rand(5,25),
       collapsed:false, collapseRemaining:0, conflict:null, infraInvested:0,
-      regulatedUntil:0, _lastShareFlag:0,
+      regulatedUntil:0, _lastShareFlag:0, _lastInfluenceFlag:0,
       resourceMod:buildResourceMod(name),
+      influence:{total:0,econ:0,corp:0,media:0,policy:0}, _policyScore:0,
+      politician:makePolitician(name),
     });
   });
   MINOR_COUNTRIES.forEach(([name,flag])=>{
@@ -544,8 +560,10 @@ function initWorld(){
       inequality:rand(30,60), poverty:rand(10,35), approval:50,
       taxRate:rand(12,28), stability:rand(45,75), tension:rand(5,30),
       collapsed:false, collapseRemaining:0, conflict:null, infraInvested:0,
-      regulatedUntil:0, _lastShareFlag:0,
+      regulatedUntil:0, _lastShareFlag:0, _lastInfluenceFlag:0,
       resourceMod:buildResourceMod(name),
+      influence:{total:0,econ:0,corp:0,media:0,policy:0}, _policyScore:0,
+      politician:makePolitician(name),
     });
   });
   s.countries.forEach(c=>{ c.gdpBase=c.gdpBase||c.gdp; c.rivalId=null; });
@@ -611,18 +629,23 @@ function makeListing(country){
 
 /* ---- migration for older saves ---- */
 function migrateState(s){
-  s.version=2;
+  const fromVersion=s.version||1;
+  s.version=CURRENT_SAVE_VERSION;
   s.resources=s.resources&&s.resources.length? s.resources : RESOURCES.map(r=>({id:r.id,name:r.name,unit:r.unit,base:r.base,price:r.base,vol:r.vol}));
   s.realEstateListings=s.realEstateListings||[];
   s.contracts=s.contracts||[];
   s.chainQueue=s.chainQueue||[];
   s.history=s.history||[];
+  s.news=s.news||[]; s.sns=s.sns||[]; s.voiceLog=s.voiceLog||{}; s.voiceViewCache=s.voiceViewCache||{};
   s.uiWorldTab=s.uiWorldTab||"overview"; s.uiBizTab=s.uiBizTab||"holdings"; s.uiMnaTab=s.uiMnaTab||"company"; s.uiChartTf=s.uiChartTf||"day";
+  s.uiInfraCountry=s.uiInfraCountry||null; s.uiResResource=s.uiResResource||"oil"; s.uiResCountry=s.uiResCountry||null;
+  s.uiFoundCountry=s.uiFoundCountry||null; s.uiFoundSector=s.uiFoundSector||"AI"; s.uiFoundTier=s.uiFoundTier||"small";
   const p=s.player;
   p.realEstate=p.realEstate||[]; p.plants=p.plants||[]; p.bank=p.bank||null; p.patents=p.patents||[]; p.resourceHoldings=p.resourceHoldings||[];
   p.impact=p.impact||{totalInvested:0,jobsCreated:0,jobsLost:0,crisesTriggered:0,nationsCollapsed:0,nationsSaved:0,companiesFounded:0};
   p.milestones=p.milestones||{power:[]};
   p.recentActions=p.recentActions||[];
+  if(p.playTimeSeconds===undefined) p.playTimeSeconds=0;
   // migrate holdings from old plain-number format {coId:number} to {coId:{shares,costBasis}}
   Object.keys(p.holdings||{}).forEach(coId=>{
     const v=p.holdings[coId];
@@ -645,6 +668,10 @@ function migrateState(s){
     if(c.infraInvested===undefined) c.infraInvested=0;
     if(c.regulatedUntil===undefined) c.regulatedUntil=0;
     if(c._lastShareFlag===undefined) c._lastShareFlag=0;
+    if(c._lastInfluenceFlag===undefined) c._lastInfluenceFlag=0;
+    if(!c.influence) c.influence={total:0,econ:0,corp:0,media:0,policy:0};
+    if(c._policyScore===undefined) c._policyScore=0;
+    if(!c.politician) c.politician=makePolitician(c.name);
     if(!c.resourceMod) c.resourceMod=buildResourceMod(c.name);
     if(c.rivalId===undefined){ const rn=RIVAL_MAP[c.name]; const r=rn?s.countries.find(x=>x.name===rn):null; c.rivalId=r?r.id:null; }
   });
@@ -656,6 +683,9 @@ function migrateState(s){
   });
   if(s.realEstateListings.length===0){
     s.countries.filter(c=>c.major).forEach(country=>{ for(let i=0;i<2;i++) s.realEstateListings.push(makeListing(country)); });
+  }
+  if(fromVersion<CURRENT_SAVE_VERSION){
+    console.log(`save data migrated: v${fromVersion} -> v${CURRENT_SAVE_VERSION}`);
   }
   return s;
 }
@@ -727,29 +757,210 @@ function ownershipPct(co){ return (hShares(co.id)/co.shares)*100; }
 
 /* =========================================================================
    3. PERSISTENCE
+   Storage backend: this environment provides `window.storage` (an async
+   key/value JSON store, persistent per-user across sessions) as the
+   supported persistence API for Claude.ai artifacts — browser storage APIs
+   such as localStorage/IndexedDB are not available here. The functions
+   below are written as a thin adapter layer (storageGet/Set/Delete/List)
+   so the backend could be swapped (e.g. for IndexedDB in a non-artifact
+   deployment) without touching the save/slot/backup logic built on top.
    ========================================================================= */
-async function saveGame(){
-  try{ await window.storage.set(SAVE_KEY, JSON.stringify(G), false); }
-  catch(e){ console.error('save failed',e); }
+const CURRENT_SAVE_VERSION=3;
+const SAVE_KEY="wt_save_v2";       // legacy single-slot key (pre-slot system)
+const SAVE_KEY_OLD="wt_save_v1";   // legacy pre-holdings-refactor key
+const ACTIVE_SLOT_KEY="wt_active_slot";
+const SLOT_COUNT=3;
+function slotDataKey(n){ return `wt_slot_${n}_data`; }
+function slotMetaKey(n){ return `wt_slot_${n}_meta`; }
+function slotBackupKey(n,i){ return `wt_slot_${n}_backup${i}`; }
+
+async function storageGet(key){
+  try{ const r=await window.storage.get(key,false); return (r&&r.value!==undefined)?r.value:null; }
+  catch(e){ return null; }
 }
-async function loadGame(){
+async function storageSet(key,value){
+  try{ const r=await window.storage.set(key,value,false); return !!r; }
+  catch(e){ console.error('storage set failed',key,e); return false; }
+}
+async function storageDelete(key){
+  try{ await window.storage.delete(key,false); return true; }
+  catch(e){ return false; }
+}
+
+/* ---- integrity ---- */
+function validateStateShape(s){
+  if(!s || typeof s!=='object') return false;
+  if(!Array.isArray(s.countries) || !s.countries.length) return false;
+  if(!Array.isArray(s.companies) || !s.companies.length) return false;
+  if(!s.player || typeof s.player!=='object') return false;
+  if(typeof s.day!=='number' || isNaN(s.day)) return false;
+  return true;
+}
+function runIntegrityCheck(){
+  const issues=[];
+  if(!G){ issues.push('ゲーム状態が存在しません'); return {ok:false,issues}; }
+  G.companies.forEach(co=>{
+    const sh=hShares(co.id);
+    if(sh>co.shares) issues.push(`${co.name}: 保有株数が発行済株式数を超過`);
+    if(sh<0) issues.push(`${co.name}: 保有株数が負の値`);
+    if(isNaN(co.price)||co.price<=0) issues.push(`${co.name}: 株価が不正 (${co.price})`);
+    if(isNaN(co.marketCap)) issues.push(`${co.name}: 時価総額が不正`);
+  });
+  if(isNaN(G.player.cash)) issues.push('現金が不正な値です');
+  if(G.player.cash<0) issues.push('現金がマイナスです');
+  G.countries.forEach(c=>{
+    if(isNaN(c.gdp)||c.gdp<=0) issues.push(`${c.name}: GDPが不正`);
+    if(c.stability<0||c.stability>100) issues.push(`${c.name}: 安定度が範囲外`);
+  });
+  return {ok:issues.length===0, issues};
+}
+
+/* ---- calendar date ---- */
+const GAME_START_YEAR=2026;
+const MONTH_DAYS=[31,28,31,30,31,30,31,31,30,31,30,31];
+function formatGameDate(day){
+  let y=GAME_START_YEAR, remaining=Math.floor(day);
+  while(true){
+    const yearLen=365;
+    if(remaining<yearLen) break;
+    remaining-=yearLen; y++;
+  }
+  let m=0;
+  while(remaining>=MONTH_DAYS[m]){ remaining-=MONTH_DAYS[m]; m++; }
+  const d=remaining+1;
+  return {year:y, month:m+1, day:d, text:`${y}年${m+1}月${d}日`};
+}
+
+/* ---- slot metadata ---- */
+function computeSlotMeta(state){
+  const controlled=state.companies.filter(co=>{
+    const h=state.player.holdings[co.id];
+    return h && h.shares && (h.shares/co.shares)>=0.5;
+  }).length;
+  const influenced=state.countries.filter(c=>c.influence && c.influence.total>=25).length;
+  const collapsedCount=state.countries.filter(c=>c.collapsed).length;
+  const nw=(()=>{
+    let v=state.player.cash;
+    state.companies.forEach(co=>{ const h=state.player.holdings[co.id]; if(h&&h.shares>0) v+=h.shares*co.price/1e12; });
+    (state.player.realEstate||[]).forEach(r=>v+=r.landValue);
+    return v;
+  })();
+  const dateInfo=formatGameDate(state.day);
+  return {
+    savedAt:Date.now(), day:state.day, dateText:dateInfo.text,
+    cash:state.player.cash, netWorth:nw,
+    companiesControlled:controlled, countriesInfluenced:influenced, countriesCollapsed:collapsedCount,
+    playTimeSeconds:(state.player.playTimeSeconds||0),
+    saveVersion:CURRENT_SAVE_VERSION,
+  };
+}
+
+/* ---- core save/load ---- */
+let currentSlot=1;
+let saveInFlight=false;
+let lastBackupRotateAt=0;
+let pendingForceBackup=false;
+const BACKUP_ROTATE_INTERVAL_MS=90000; // rotate backups at most every 90s of real time, to avoid
+                                        // excessive storage I/O on every single trade while still
+                                        // keeping recent recovery points.
+async function saveGame(opts){
+  if(!G) return;
+  if(saveInFlight){ return; }
+  saveInFlight=true;
   try{
-    const r=await window.storage.get(SAVE_KEY, false);
-    if(r && r.value){ G=migrateState(JSON.parse(r.value)); return true; }
-  }catch(e){ /* try old key */ }
+    const n=currentSlot;
+    const json=JSON.stringify(G);
+    const forceBackup = (opts && opts.forceBackup) || pendingForceBackup;
+    pendingForceBackup=false;
+    const now=Date.now();
+    if(forceBackup || (now-lastBackupRotateAt)>BACKUP_ROTATE_INTERVAL_MS){
+      const prevCurrent=await storageGet(slotDataKey(n));
+      if(prevCurrent){
+        const b2=await storageGet(slotBackupKey(n,1));
+        if(b2!==null) await storageSet(slotBackupKey(n,2), b2);
+        await storageSet(slotBackupKey(n,1), prevCurrent);
+      }
+      lastBackupRotateAt=now;
+    }
+    await storageSet(slotDataKey(n), json);
+    await storageSet(slotMetaKey(n), JSON.stringify(computeSlotMeta(G)));
+    await storageSet(ACTIVE_SLOT_KEY, String(n));
+  }catch(e){ console.error('save failed',e); }
+  finally{ saveInFlight=false; }
+}
+async function loadSlot(n){
+  const raw=await storageGet(slotDataKey(n));
+  if(raw){
+    try{
+      const parsed=JSON.parse(raw);
+      if(validateStateShape(parsed)){ G=migrateState(parsed); currentSlot=n; return {ok:true}; }
+    }catch(e){ /* fall through to backups */ }
+  }
+  // corrupted or missing — try backups in order
+  for(let i=1;i<=3;i++){
+    const braw=await storageGet(slotBackupKey(n,i));
+    if(!braw) continue;
+    try{
+      const parsed=JSON.parse(braw);
+      if(validateStateShape(parsed)){
+        G=migrateState(parsed); currentSlot=n;
+        await storageSet(slotDataKey(n), braw); // restore corrupted slot from backup
+        return {ok:true, restoredFromBackup:i};
+      }
+    }catch(e){ /* try next backup */ }
+  }
+  return {ok:false};
+}
+async function listSaveSlots(){
+  const slots=[];
+  for(let n=1;n<=SLOT_COUNT;n++){
+    const metaRaw=await storageGet(slotMetaKey(n));
+    if(metaRaw){
+      try{ slots.push({slot:n, meta:JSON.parse(metaRaw)}); continue; }catch(e){}
+    }
+    const dataRaw=await storageGet(slotDataKey(n));
+    if(dataRaw){
+      try{ const parsed=JSON.parse(dataRaw); slots.push({slot:n, meta:computeSlotMeta(parsed)}); continue; }catch(e){}
+    }
+    slots.push({slot:n, meta:null});
+  }
+  return slots;
+}
+async function deleteSlot(n){
+  await storageDelete(slotDataKey(n));
+  await storageDelete(slotMetaKey(n));
+  for(let i=1;i<=3;i++) await storageDelete(slotBackupKey(n,i));
+}
+async function migrateLegacySaveIfNeeded(){
+  // if pre-slot-system save exists and no slot data yet, adopt it as slot 1
+  const existingSlot1=await storageGet(slotDataKey(1));
+  if(existingSlot1) return;
+  const legacy=await storageGet(SAVE_KEY) || await storageGet(SAVE_KEY_OLD);
+  if(!legacy) return;
   try{
-    const r2=await window.storage.get(SAVE_KEY_OLD, false);
-    if(r2 && r2.value){ G=migrateState(JSON.parse(r2.value)); return true; }
-  }catch(e){ /* no save yet */ }
-  return false;
+    const parsed=JSON.parse(legacy);
+    if(validateStateShape(parsed)){
+      await storageSet(slotDataKey(1), legacy);
+      const migrated=migrateState(JSON.parse(legacy));
+      await storageSet(slotMetaKey(1), JSON.stringify(computeSlotMeta(migrated)));
+    }
+  }catch(e){ /* ignore unreadable legacy save */ }
 }
 async function resetGame(){
-  try{ await window.storage.delete(SAVE_KEY, false); }catch(e){}
+  await deleteSlot(currentSlot);
   G=initWorld();
   recalcWorldPower();
-  saveGame();
+  startTutorial();
+  await saveGame();
   renderAll();
   toast("ゲームをリセットしました");
+}
+async function startNewWorldInSlot(n){
+  currentSlot=n;
+  G=initWorld();
+  recalcWorldPower();
+  startTutorial();
+  await saveGame();
 }
 
 /* =========================================================================
@@ -864,6 +1075,7 @@ function checkCountryConcentration(country, amount){
    ========================================================================= */
 const CONFLICT_NAMES=["国境紛争","内戦の激化","政治対立の激化","大規模な反政府デモ"];
 function triggerCollapse(country){
+  pendingForceBackup=true;
   country.collapsed=true; country.collapseRemaining=randInt(60,150); country.stability=8; country.conflict=null;
   G.companies.filter(co=>co.country===country.id).forEach(co=>{
     co.marketCap=Math.max(0.01, co.marketCap*rand(0.25,0.5));
@@ -914,6 +1126,187 @@ function updateCountryStability(c, days){
   }
   if(c.stability<20 && Math.random()<0.02*(days/7)){ triggerCollapse(c); }
   else if(c.stability<40 && c.unrest>55 && Math.random()<0.015*(days/7)){ triggerConflict(c); }
+}
+
+/* =========================================================================
+   5b. NATIONAL INFLUENCE SYSTEM
+   Player influence over a country's government is built from four channels
+   (economic, corporate, media, policy) rather than a single "control" button.
+   Policies succeed or fail based on government support, public opinion,
+   the economy, media reach, and the relationship with the country's leader —
+   never guaranteed just because influence is high.
+   ========================================================================= */
+function recalcCountryInfluence(country){
+  if(!country) return;
+  const compsInCountry=G.companies.filter(c=>c.country===country.id);
+  const totalCap=compsInCountry.reduce((a,c)=>a+c.marketCap,0);
+  const ownedCap=compsInCountry.reduce((a,c)=>a+(hShares(c.id)/c.shares)*c.marketCap,0);
+  const corp=clamp((totalCap>0?ownedCap/totalCap:0)*140,0,100);
+  const mediaComps=compsInCountry.filter(c=>c.sector==='メディア');
+  const mediaTotal=mediaComps.reduce((a,c)=>a+c.marketCap,0);
+  const mediaOwned=mediaComps.reduce((a,c)=>a+(hShares(c.id)/c.shares)*c.marketCap,0);
+  const media=clamp((mediaTotal>0?(mediaOwned/mediaTotal)*90:0) + (mediaComps.some(c=>hShares(c.id)>0)?10:0),0,100);
+  const econ=clamp(((country.infraInvested||0)/Math.max(country.gdp*0.05,0.5))*55 + (ownedCap/Math.max(country.gdp,1))*90,0,100);
+  const policy=clamp(country._policyScore||0,0,100);
+  const total=clamp(econ*0.30+corp*0.28+media*0.16+policy*0.26,0,100);
+  country.influence={total,econ,corp,media,policy};
+  [60,80].forEach(t=>{
+    if(total>=t && (country._lastInfluenceFlag||0)<t){
+      country._lastInfluenceFlag=t;
+      const rival=G.countries.find(c=>c.id===country.rivalId);
+      if(rival){
+        rival.tension=clamp((rival.tension||0)+(t===80?10:6),0,100);
+        scheduleChain(G.day+12,'news_only',{head:"他国が警戒",tag:'world',body:`GLOBAL CAPITALの${country.flag}${country.name}政府に対する影響力拡大を受け、${rival.flag}${rival.name}が外交的な警戒感を強めている。`});
+      }
+    }
+  });
+}
+function lobbyActivity(countryId, amount){
+  const c=G.countries.find(x=>x.id===countryId);
+  if(!c) return {ok:false,msg:"国が見つかりません"};
+  if(amount<=0) return {ok:false,msg:"金額を入力してください"};
+  if(amount>G.player.cash) return {ok:false,msg:"資金が不足しています"};
+  G.player.cash-=amount;
+  c._policyScore=clamp((c._policyScore||0)+clamp(amount*3,2,25),0,150);
+  c.politician.relation=clamp(c.politician.relation+rand(1,4),0,100);
+  G.player.impact.totalInvested+=amount;
+  pushNews("ロビー活動",`GLOBAL CAPITALが${c.flag}${c.name}でロビー活動・シンクタンクへの資金提供を実施した。`,'world');
+  recalcCountryInfluence(c);
+  saveGame();
+  return {ok:true};
+}
+const POLICIES=[
+ {id:'corp_tax_cut', category:'経済', name:'法人税引き下げ提言', cost:8, minInfluence:25,
+   desc:'国内企業の法人税負担を軽減するよう働きかける。',
+   effect:(c)=>{ c.taxRate=clamp(c.taxRate-2,5,50); c.growthTendency=clamp(c.growthTendency+0.3,-5,12); }},
+ {id:'investment_incentive', category:'経済', name:'投資優遇措置', cost:14, minInfluence:35,
+   desc:'対内投資への優遇税制を提言する。',
+   effect:(c)=>{ c.taxRate=clamp(c.taxRate-1,5,50); c.gdpGrowth=clamp(c.gdpGrowth+0.3,-14,14); }},
+ {id:'rate_pressure', category:'経済', name:'金利政策への働きかけ', cost:16, minInfluence:45,
+   desc:'中央銀行に低金利政策を働きかける。',
+   effect:(c)=>{ c.rate=clamp(c.rate-0.5,0,30); }},
+ {id:'subsidy_semicon', category:'産業', name:'半導体産業補助金', cost:15, minInfluence:35,
+   desc:'国内半導体企業への補助金を提言する。',
+   effect:(c)=>{ G.companies.filter(co=>co.country===c.id && co.sector==='半導体').forEach(co=>co.growth=clamp(co.growth+3,-10,20)); }},
+ {id:'subsidy_ai', category:'産業', name:'AI産業支援策', cost:15, minInfluence:35,
+   desc:'AI関連企業への支援策を提言する。',
+   effect:(c)=>{ G.companies.filter(co=>co.country===c.id && co.sector==='AI').forEach(co=>co.growth=clamp(co.growth+3,-10,20)); }},
+ {id:'energy_policy', category:'産業', name:'エネルギー政策転換', cost:12, minInfluence:30,
+   desc:'国内エネルギー政策の見直しを提言する。',
+   effect:(c)=>{ G.companies.filter(co=>co.country===c.id && co.sector==='エネルギー').forEach(co=>co.growth=clamp(co.growth+2.5,-10,20)); }},
+ {id:'auto_policy', category:'産業', name:'自動車産業支援', cost:12, minInfluence:30,
+   desc:'自動車産業への支援策を提言する。',
+   effect:(c)=>{ G.companies.filter(co=>co.country===c.id && co.sector==='自動車').forEach(co=>co.growth=clamp(co.growth+2.5,-10,20)); }},
+ {id:'tariff_cut', category:'貿易', name:'関税引き下げ', cost:10, minInfluence:30,
+   desc:'輸入関税の引き下げを提言する。',
+   effect:(c)=>{ Object.keys(c.resourceMod||{}).forEach(k=>c.resourceMod[k]=Math.max(0.5,c.resourceMod[k]*0.95)); }},
+ {id:'tariff_up', category:'貿易', name:'関税引き上げ', cost:10, minInfluence:30,
+   desc:'輸入品への関税引き上げを提言する。国内企業には追い風だが他国の反発を招く。',
+   effect:(c)=>{ Object.keys(c.resourceMod||{}).forEach(k=>c.resourceMod[k]=Math.min(2.0,c.resourceMod[k]*1.08)); const r=G.countries.find(x=>x.id===c.rivalId); if(r) r.tension=clamp((r.tension||0)+8,0,100); }},
+ {id:'infra_rail', category:'インフラ', name:'鉄道インフラ拡充', cost:20, minInfluence:40,
+   desc:'鉄道インフラの拡充を提言する。',
+   effect:(c)=>{ c.growthTendency=clamp(c.growthTendency+0.4,-5,12); c.happiness=clamp(c.happiness+3,0,100); }},
+ {id:'infra_data', category:'インフラ', name:'データセンター誘致政策', cost:18, minInfluence:40,
+   desc:'データセンター誘致のための規制緩和・優遇策を提言する。',
+   effect:(c)=>{ G.companies.filter(co=>co.country===c.id && (co.sector==='IT'||co.sector==='AI')).forEach(co=>co.growth=clamp(co.growth+2,-10,20)); }},
+];
+function checkInfluenceRisk(c, boosted){
+  if(!c) return;
+  const inf=c.influence?c.influence.total:0;
+  let p = (inf>85? 0.05 : inf>70? 0.02 : inf>50? 0.007 : 0.0015);
+  if(boosted) p*=1.6;
+  if(Math.random()<p){
+    if(inf>85 && Math.random()<0.4){
+      c.approval=clamp(c.approval-rand(10,20),0,100);
+      c._policyScore=Math.max(0,(c._policyScore||0)-20);
+      c.unrest=clamp(c.unrest+rand(3,8),0,100);
+      pushNews("スキャンダル報道",`${c.flag}${c.name}で「巨大投資グループ、政府との関係を巡り疑惑」との報道が広がっている。`,'world',true);
+      pushSNS(`GLOBAL CAPITALと${c.name}政府の関係、さすがに近すぎない？`,"📰","scandal_watch");
+      addHistory(`${c.flag}${c.name}でGLOBAL CAPITALの政治的影響力を巡るスキャンダルが報じられた。`);
+    } else {
+      const kind=pick(["メディアからの批判","国民の反発","野党の追及","独占禁止法に基づく調査","資産・出所に関する政府監査"]);
+      c.approval=clamp(c.approval-rand(3,8),0,100);
+      c._policyScore=Math.max(0,(c._policyScore||0)-8);
+      pushNews("批判の高まり",`${c.flag}${c.name}でGLOBAL CAPITALに対する${kind}が強まっている。`,'world');
+    }
+  }
+}
+function proposePolicy(countryId, policyId){
+  const c=G.countries.find(x=>x.id===countryId);
+  const policy=POLICIES.find(p=>p.id===policyId);
+  if(!c||!policy) return {ok:false,msg:"データが見つかりません"};
+  recalcCountryInfluence(c);
+  if(c.influence.total<policy.minInfluence) return {ok:false,msg:`必要な影響力（${policy.minInfluence}）に達していません（現在 ${c.influence.total.toFixed(0)}）`};
+  if(policy.cost>G.player.cash) return {ok:false,msg:"資金が不足しています"};
+  G.player.cash-=policy.cost;
+  G.player.impact.totalInvested+=policy.cost;
+  const supportFactor=(c.govSupport-50)/100;
+  const opinionFactor=(c.happiness-50)/150;
+  const econFactor=clamp(c.gdpGrowth/20,-0.3,0.3);
+  const mediaFactor=(c.influence.media/100)*0.15;
+  const relationFactor=((c.politician.relation-50)/100)*0.2;
+  const influenceFactor=(c.influence.total/100)*0.35;
+  const chance=clamp(0.35 + supportFactor*0.3 + opinionFactor + econFactor + mediaFactor + relationFactor + influenceFactor, 0.05, 0.92);
+  const success=Math.random()<chance;
+  const factors=[
+   {label:'政府支持率',value:c.govSupport.toFixed(0)+'%'},
+   {label:'国民世論（幸福度）',value:c.happiness.toFixed(0)},
+   {label:'経済状況（GDP成長率）',value:c.gdpGrowth.toFixed(1)+'%'},
+   {label:'メディア影響力',value:c.influence.media.toFixed(0)},
+   {label:`${c.politician.title}との関係`,value:c.politician.relation.toFixed(0)},
+   {label:'総合影響力',value:c.influence.total.toFixed(0)},
+  ];
+  const stars=clamp(Math.round(c.influence.total/20),1,5);
+  if(success){
+    policy.effect(c);
+    c._policyScore=clamp((c._policyScore||0)+10,0,150);
+    c.politician.relation=clamp(c.politician.relation+3,0,100);
+    c.govSupport=clamp(c.govSupport+(Math.random()<0.5?2:-1),0,100);
+    pushNews("政策成立",`${c.flag}${c.name}政府が「${policy.name}」を決定した。${policy.desc}`,'world',true);
+    addHistory(`${c.flag}${c.name}で「${policy.name}」が成立した（GLOBAL CAPITALの働きかけ）。`);
+  } else {
+    c._policyScore=Math.max(0,(c._policyScore||0)-5);
+    c.politician.relation=clamp(c.politician.relation-2,0,100);
+    pushNews("政策見送り",`GLOBAL CAPITALが提言した「${policy.name}」は${c.flag}${c.name}政府に見送られた。`,'world');
+  }
+  checkInfluenceRisk(c, true);
+  recalcCountryInfluence(c);
+  saveGame();
+  return {ok:true, success, factors, stars, policyName:policy.name, chance};
+}
+const NEGOTIATION_SCENARIOS=[
+ {gov:"国内の雇用を維持してもらえるなら、特定産業への税制優遇を検討する。", choices:[
+   {label:'50万人雇用する', key:'jobs', successBonus:0.3, cost:0},
+   {label:'10兆円投資する', key:'invest', successBonus:0.35, cost:10},
+   {label:'インフラ整備する', key:'infra', successBonus:0.25, cost:15},
+   {label:'条件を拒否する', key:'reject', successBonus:-0.2, cost:0},
+ ]},
+ {gov:"市場の混乱を抑えてくれるなら、規制強化は見送る用意がある。", choices:[
+   {label:'大規模な売却を控えると約束する', key:'promise', successBonus:0.25, cost:0},
+   {label:'安定化基金に5兆円拠出する', key:'fund', successBonus:0.3, cost:5},
+   {label:'条件を拒否する', key:'reject', successBonus:-0.2, cost:0},
+ ]},
+];
+function resolveNegotiation(countryId, scenarioIdx, choiceIdx){
+  const c=G.countries.find(x=>x.id===countryId);
+  const scenario=NEGOTIATION_SCENARIOS[scenarioIdx];
+  if(!c||!scenario) return {ok:false,msg:"データが見つかりません"};
+  const choice=scenario.choices[choiceIdx];
+  if(!choice) return {ok:false,msg:"選択が無効です"};
+  if(choice.cost>G.player.cash) return {ok:false,msg:"資金が不足しています"};
+  G.player.cash-=choice.cost;
+  G.player.impact.totalInvested+=choice.cost;
+  c._policyScore=clamp((c._policyScore||0)+choice.successBonus*40,0,150);
+  c.politician.relation=clamp(c.politician.relation+choice.successBonus*30,0,100);
+  if(choice.key==='reject'){
+    pushNews("非公開交渉決裂",`GLOBAL CAPITALと${c.flag}${c.name}政府との非公開交渉は決裂した。`,'world');
+  } else {
+    pushNews("非公開交渉成立",`GLOBAL CAPITALと${c.flag}${c.name}政府の間で非公開の合意が成立したと関係者が語った。`,'world',true);
+    addHistory(`GLOBAL CAPITALが${c.flag}${c.name}政府と非公開交渉で合意した。`);
+  }
+  recalcCountryInfluence(c);
+  saveGame();
+  return {ok:true};
 }
 
 /* =========================================================================
@@ -1243,6 +1636,11 @@ function simulateDay(){
     c.approval = clamp(c.approval + (50-c.approval)*0.01*scale + normRand()*0.15*scale, 0, 100);
     c.tension = clamp((c.tension||10) + (10-(c.tension||10))*0.02*scale + normRand()*0.1*scale, 0, 100);
     if(c._recentInvest) c._recentInvest*=0.98;
+    c._policyScore=Math.max(0,(c._policyScore||0)-0.03);
+    c.politician.relation=clamp(c.politician.relation+(50-c.politician.relation)*0.01,0,100);
+    c.politician.approval=clamp(c.politician.approval+(c.govSupport-c.politician.approval)*0.05+normRand()*0.2,0,100);
+    recalcCountryInfluence(c);
+    checkInfluenceRisk(c, false);
     updateCountryStability(c,1);
   });
 
@@ -1531,6 +1929,7 @@ function maybeGenerateSNS(){
 const VOICE_ROLES=["市民の声","投資家の声","若者の声","高齢者の声","経営者の声","失業者の声"];
 function genVoiceTemplates(country){
   const hi=country.happiness, un=country.unrest, ue=country.unemployment, infl=country.inflation, appr=country.approval;
+  const infl2=(country.influence&&country.influence.total)||0;
   if(country.collapsed){
     return {
      "市民の声":[`来月もこの国で普通に生活できるのか、正直不安になってきた。`,`政府がないまま、どうやって暮らしていけばいいのか分からない。`],
@@ -1556,10 +1955,12 @@ function genVoiceTemplates(country){
      `最近${infl>5?"物価がどんどん上がって":"物価はそこまで変わらなくて"}、生活の実感としては${hi>55?"なんとかやれてる":"正直きつい"}かな。`,
      `ニュースで大きな買収の話をよく聞くけど、正直自分の生活にどう関係あるのかまだピンときてない。`,
      `${un>40?"最近街の雰囲気がなんだかピリピリしてる気がする。":"普段の生活は今のところ大きく変わってない。"}`,
+     ...(infl2>60?[`最近の政策、あの巨大投資会社に都合が良すぎない？`,`ニュースでは政府主導と言っているけど、裏に誰かいるんじゃないかって気がする。`]:[]),
    ],
    "投資家の声":[
      `GLOBAL CAPITALの動きは正直読めない。ただ、${G.macro.globalSentiment>10?"今の相場は追い風":"今の相場は逆風"}だと思ってる。`,
      `この国の企業に投資してるけど、外資の大型買収のニュースで${appr>55?"期待の方が大きい":"警戒感が強まってる"}。`,
+     ...(infl2>50?[`政府がGLOBAL CAPITALの意向を意識しているのは間違いない。投資判断の材料にしている。`]:[]),
    ],
    "若者の声":[
      `就職先を考えるとき、外資に買収されるかどうかも気になるようになった。`,
@@ -1572,11 +1973,13 @@ function genVoiceTemplates(country){
    "経営者の声":[
      `外資系投資会社の存在感が増していて、うちのような中小企業も無関係ではいられない。`,
      `資金調達の環境は${country.rate>6?"厳しくなっている":"比較的安定している"}というのが実感だ。`,
+     ...(infl2>70?[`政府への影響力を考えると、あの会社を敵に回すのは得策じゃない。`]:[]),
    ],
    "失業者の声":[
      `${ue>7?"求人はあるけど条件が合わなくて、なかなか決まらない。":"再就職先を探しているところ。焦らずやっていくつもり。"}`,
      `大きな会社の買収のニュースを見るたび、自分の業界にも影響あるのか気になる。`,
    ],
+   ...(infl2>75?{"政治評論家の声":[`一つの企業が政府にここまで影響を与えて大丈夫なのか、真剣に議論すべき時期だと思う。`,`経済には貢献しているのは事実。ただ、その力の使い方は誰がチェックするのか。`]}:{}),
   };
 }
 function generateVoices(country, count=6){
@@ -1613,9 +2016,10 @@ GDP成長率: ${country.gdpGrowth.toFixed(1)}%
 ${situation}
 プレイヤー(投資会社GLOBAL CAPITAL)への評価: ${country.approval.toFixed(0)}/100
 プレイヤーのWORLD POWER: ${G.player.worldPower}
+プレイヤーのこの国の政府への政治的影響力: ${(country.influence&&country.influence.total||0).toFixed(0)}/100（50以上で政府の政策への影響が疑われ始め、75以上だと国民や評論家がその存在を明確に意識する）
 最近のニュース: ${recentNews||"特になし"}
 
-6人の属性はそれぞれ「市民」「投資家」「若者」「高齢者」「経営者」「失業者」とし、それぞれの立場から自然な、互いに異なる視点のコメントにしてください。同じ言い回しの繰り返しは禁止です。国家崩壊や紛争の状況にある場合はそれを反映した切実な内容にしてください。
+6人の属性はそれぞれ「市民」「投資家」「若者」「高齢者」「経営者」「失業者」とし、それぞれの立場から自然な、互いに異なる視点のコメントにしてください。同じ言い回しの繰り返しは禁止です。国家崩壊や紛争の状況にある場合はそれを反映した切実な内容にしてください。政治的影響力が高い場合は、政府とGLOBAL CAPITALの関係を疑問視・評価する声も混ぜてください。
 出力は必ず次のJSON形式のみ。前置きや説明文、コードブロック記号は一切付けないでください:
 [{"role":"市民","text":"..."},{"role":"投資家","text":"..."},{"role":"若者","text":"..."},{"role":"高齢者","text":"..."},{"role":"経営者","text":"..."},{"role":"失業者","text":"..."}]`;
   const response=await fetch("https://api.anthropic.com/v1/messages",{
@@ -1888,6 +2292,35 @@ function renderTutorialUI(){
    14. RENDERING — shared helpers
    ========================================================================= */
 let currentScreen="world";
+let openModalKind=null; // 'company' | 'settings' | 'negotiation' | null
+let openModalCompanyId=null;
+
+/* Preserve scroll position and focused-input state across a "background"
+   re-render (e.g. triggered by the clock advancing), so the player's current
+   view, filters, chart timeframe, and any in-progress typing are not reset.
+   Explicit navigation (switchScreen) intentionally still resets scroll. */
+function withPreservedUIState(fn){
+  const contentEl=document.getElementById('content');
+  const prevScrollTop=contentEl.scrollTop;
+  const prevScrollHeight=contentEl.scrollHeight;
+  const active=document.activeElement;
+  let focusInfo=null;
+  if(active && contentEl.contains(active) && (active.tagName==='INPUT'||active.tagName==='SELECT'||active.tagName==='TEXTAREA')){
+    focusInfo={id:active.id, value:active.value, selStart:active.selectionStart, selEnd:active.selectionEnd, tag:active.tagName};
+  }
+  fn();
+  if(focusInfo && focusInfo.id){
+    const el=document.getElementById(focusInfo.id);
+    if(el){
+      el.value=focusInfo.value;
+      try{ el.focus({preventScroll:true}); }catch(e){ el.focus(); }
+      if(focusInfo.tag!=='SELECT' && el.setSelectionRange){ try{ el.setSelectionRange(focusInfo.selStart,focusInfo.selEnd); }catch(e){} }
+    }
+  }
+  const newScrollHeight=contentEl.scrollHeight;
+  const delta=newScrollHeight-prevScrollHeight;
+  contentEl.scrollTop=prevScrollTop+delta;
+}
 function switchScreen(name){
   currentScreen=name;
   document.querySelectorAll('.screen').forEach(el=>el.classList.remove('active'));
@@ -1899,7 +2332,43 @@ function switchScreen(name){
   checkTutorialProgress();
   renderTutorialUI();
 }
-function renderAll(){ renderTopbar(); renderScreen(currentScreen); checkTutorialProgress(); renderTutorialUI(); }
+function renderAll(){
+  renderTopbar();
+  withPreservedUIState(()=>renderScreen(currentScreen));
+  refreshCompanyModalIfOpen();
+  checkTutorialProgress();
+  renderTutorialUI();
+}
+function refreshCompanyModalIfOpen(){
+  if(openModalKind!=='company' || !openModalCompanyId) return;
+  const modalLayer=document.getElementById('modal-layer');
+  if(!modalLayer || !modalLayer.classList.contains('open')) return;
+  const co=G.companies.find(c=>c.id===openModalCompanyId);
+  if(!co){ closeModal(); return; }
+  const buyEl=document.getElementById('buy-shares');
+  const sellEl=document.getElementById('sell-shares');
+  const buyVal=buyEl?buyEl.value:null;
+  const sellVal=sellEl?sellEl.value:null;
+  const activeEl=document.activeElement;
+  const activeId=activeEl?activeEl.id:null;
+  const selStart=(activeEl&&activeEl.selectionStart!==undefined)?activeEl.selectionStart:null;
+  const modalBody=document.getElementById('modal-body');
+  const prevScrollTop=modalBody?modalBody.scrollTop:0;
+  openCompanyModal(co.id, {silent:true});
+  const newBuyEl=document.getElementById('buy-shares');
+  const newSellEl=document.getElementById('sell-shares');
+  if(newBuyEl && buyVal!==null){ newBuyEl.value=buyVal; newBuyEl.dispatchEvent(new Event('input')); }
+  if(newSellEl && sellVal!==null){ newSellEl.value=sellVal; newSellEl.dispatchEvent(new Event('input')); }
+  if(activeId){
+    const el=document.getElementById(activeId);
+    if(el){
+      try{ el.focus({preventScroll:true}); }catch(e){ el.focus(); }
+      if(selStart!==null && el.setSelectionRange){ try{ el.setSelectionRange(selStart,selStart); }catch(e){} }
+    }
+  }
+  const newModalBody=document.getElementById('modal-body');
+  if(newModalBody) newModalBody.scrollTop=prevScrollTop;
+}
 function renderScreen(name){
   if(name==="world") renderWorld();
   else if(name==="market") renderMarket();
@@ -1925,7 +2394,10 @@ function wireCommon(root){
   root.querySelectorAll('[data-open-country]').forEach(elm=>elm.addEventListener('click',()=>{ G.uiCountry=elm.dataset.openCountry; switchScreen('people'); }));
 }
 function openModal(html){ document.getElementById('modal-body').innerHTML=html; document.getElementById('modal-layer').classList.add('open'); }
-function closeModal(){ document.getElementById('modal-layer').classList.remove('open'); }
+function closeModal(){
+  document.getElementById('modal-layer').classList.remove('open');
+  openModalKind=null; openModalCompanyId=null;
+}
 
 /* =========================================================================
    15. WORLD SCREEN (概況 / 影響 / 年表)
@@ -2249,17 +2721,20 @@ function bizHoldings(){
   `;
 }
 function bizFound(){
+  const defCountry=G.uiFoundCountry||G.countries[0].id;
+  const defSector=G.uiFoundSector||FOUNDABLE_SECTORS[0];
+  const defTier=G.uiFoundTier||'small';
   return `
     <div class="panel">
       <div class="panel-title">起業</div>
       <div class="row-sub" style="margin-bottom:10px;">自ら資金を投じて企業を設立し、100%子会社として経営できます。スタートアップは成長率が高い一方、変動も大きくなります。</div>
       <label class="field-label">国</label>
-      <select id="found-country">${G.countries.map(c=>`<option value="${c.id}">${c.flag} ${c.name}</option>`).join('')}</select>
+      <select id="found-country">${G.countries.map(c=>`<option value="${c.id}" ${c.id===defCountry?'selected':''}>${c.flag} ${c.name}</option>`).join('')}</select>
       <label class="field-label" style="margin-top:8px;">業種</label>
-      <select id="found-sector">${FOUNDABLE_SECTORS.map(s=>`<option value="${s}">${s}</option>`).join('')}</select>
+      <select id="found-sector">${FOUNDABLE_SECTORS.map(s=>`<option value="${s}" ${s===defSector?'selected':''}>${s}</option>`).join('')}</select>
       <label class="field-label" style="margin-top:8px;">規模</label>
       <div class="chip-select" id="found-tier">
-        ${FOUND_TIERS.map((t,i)=>`<button data-tier="${t.key}" class="${i===0?'active':''}">${t.label}（${fmtYen(t.cost)}）</button>`).join('')}
+        ${FOUND_TIERS.map(t=>`<button data-tier="${t.key}" class="${t.key===defTier?'active':''}">${t.label}（${fmtYen(t.cost)}）</button>`).join('')}
       </div>
       <button class="btn primary block" id="btn-found" style="margin-top:12px;">この企業を設立する</button>
     </div>
@@ -2292,6 +2767,8 @@ function bizRealEstate(){
 }
 function bizResources(){
   const holdings=G.player.resourceHoldings;
+  const defRes=G.uiResResource||'oil';
+  const defCountry=G.uiResCountry||G.countries[0].id;
   return `
     <div class="panel">
       <div class="panel-title">世界資源価格</div>
@@ -2303,9 +2780,9 @@ function bizResources(){
     <div class="panel">
       <div class="panel-title">資源を購入</div>
       <label class="field-label">資源</label>
-      <select id="res-select">${G.resources.map(r=>`<option value="${r.id}">${r.name}</option>`).join('')}</select>
+      <select id="res-select">${G.resources.map(r=>`<option value="${r.id}" ${r.id===defRes?'selected':''}>${r.name}</option>`).join('')}</select>
       <label class="field-label" style="margin-top:8px;">仕入れ国</label>
-      <select id="res-country">${G.countries.map(c=>`<option value="${c.id}">${c.flag} ${c.name}</option>`).join('')}</select>
+      <select id="res-country">${G.countries.map(c=>`<option value="${c.id}" ${c.id===defCountry?'selected':''}>${c.flag} ${c.name}</option>`).join('')}</select>
       <div class="row-sub" id="res-price-preview" style="margin-top:6px;"></div>
       <label class="field-label" style="margin-top:8px;">投資額（兆円） ・ 現金 ${fmtYen(G.player.cash)}</label>
       <input type="number" id="res-amount" min="0" step="0.1" value="1"/>
@@ -2415,15 +2892,16 @@ function bizMedia(){
 }
 function wireBizTab(tab, el){
   if(tab==='found'){
-    let selTier='small';
     el.querySelectorAll('#found-tier button').forEach(b=>b.addEventListener('click',()=>{
-      selTier=b.dataset.tier;
+      G.uiFoundTier=b.dataset.tier;
       el.querySelectorAll('#found-tier button').forEach(x=>x.classList.toggle('active',x===b));
     }));
+    document.getElementById('found-country').addEventListener('change',e=>{ G.uiFoundCountry=e.target.value; });
+    document.getElementById('found-sector').addEventListener('change',e=>{ G.uiFoundSector=e.target.value; });
     document.getElementById('btn-found').addEventListener('click',()=>{
       const countryId=document.getElementById('found-country').value;
       const sector=document.getElementById('found-sector').value;
-      const r=foundCompany(countryId, sector, selTier);
+      const r=foundCompany(countryId, sector, G.uiFoundTier||'small');
       if(r.ok){ toast("企業を設立しました"); renderAll(); } else toast(r.msg);
     });
   } else if(tab==='realestate'){
@@ -2439,6 +2917,7 @@ function wireBizTab(tab, el){
     const updatePreview=()=>{
       const resId=document.getElementById('res-select').value;
       const cId=document.getElementById('res-country').value;
+      G.uiResResource=resId; G.uiResCountry=cId;
       const resource=G.resources.find(r=>r.id===resId);
       const country=G.countries.find(c=>c.id===cId);
       if(resource&&country) document.getElementById('res-price-preview').textContent=`現地価格指数: ${resourceLocalPrice(resource,country).toFixed(1)}`;
@@ -2581,7 +3060,7 @@ function mnaCompanyHtml(){
   `;
 }
 function mnaInfraHtml(){
-  const defaultId = (G.tutorial && G.tutorial.active && G.tutorial.struggleId) ? G.tutorial.struggleId : null;
+  const defaultId = G.uiInfraCountry || ((G.tutorial && G.tutorial.active && G.tutorial.struggleId) ? G.tutorial.struggleId : null);
   return `
     <div class="panel">
       <div class="row-sub">国家のインフラ（道路・港湾・電力・通信など）に投資すると、物流効率の改善から雇用拡大、国民生活の向上まで、時間をかけて連鎖的に良い効果が波及します。不安定な国家への投資は「国家救済」としてWORLD IMPACTに記録されます。</div>
@@ -2624,6 +3103,7 @@ function mnaContractHtml(){
 }
 function wireMnaTab(tab, el){
   if(tab==='infra'){
+    document.getElementById('infra-country').addEventListener('change',e=>{ G.uiInfraCountry=e.target.value; });
     document.getElementById('btn-infra').addEventListener('click',()=>{
       const cId=document.getElementById('infra-country').value;
       const amt=parseFloat(document.getElementById('infra-amount').value)||0;
@@ -2664,7 +3144,14 @@ function renderPeople(){
   const el=document.getElementById('screen-people');
   if(!G.uiCountry) G.uiCountry=G.countries[0].id;
   const country=G.countries.find(c=>c.id===G.uiCountry)||G.countries[0];
-  const voices=generateVoices(country,6);
+  recalcCountryInfluence(country);
+  const cached=G.voiceViewCache[country.id];
+  const needFresh = !cached || (cached.source==='template' && (G.day-cached.day)>=7);
+  if(needFresh){ G.voiceViewCache[country.id]={source:'template', voices:generateVoices(country,6), day:G.day}; }
+  const voiceState=G.voiceViewCache[country.id];
+  const inf=country.influence;
+  const pol=country.politician;
+  const eligiblePolicies=POLICIES;
   el.innerHTML=`
     <div class="panel">
       <div class="panel-title">WORLD PEOPLE</div>
@@ -2682,22 +3169,83 @@ function renderPeople(){
         <div class="metric-box"><div class="lbl">政情安定度</div><div class="val ${country.stability>60?'teal':country.stability<30?'red':''}">${country.stability.toFixed(0)}</div></div>
         <div class="metric-box"><div class="lbl">物価不満</div><div class="val">${clamp(country.inflation*10,0,100).toFixed(0)}</div></div>
         <div class="metric-box"><div class="lbl">失業不安</div><div class="val">${clamp(country.unemployment*6,0,100).toFixed(0)}</div></div>
-        <div class="metric-box"><div class="lbl">政府支持</div><div class="val">${country.govSupport.toFixed(0)}</div></div>
+        <div class="metric-box"><div class="lbl">政府支持率</div><div class="val">${country.govSupport.toFixed(0)}%</div></div>
         <div class="metric-box"><div class="lbl">社会不安</div><div class="val ${country.unrest>50?'red':''}">${country.unrest.toFixed(0)}</div></div>
         <div class="metric-box"><div class="lbl">貧困率</div><div class="val">${country.poverty.toFixed(0)}%</div></div>
         <div class="metric-box"><div class="lbl">対プレイヤー緊張度</div><div class="val ${country.tension>60?'red':''}">${(country.tension||0).toFixed(0)}</div></div>
         <div class="metric-box"><div class="lbl">プレイヤー評価</div><div class="val ${country.approval>55?'teal':country.approval<40?'red':''}">${country.approval.toFixed(0)}</div></div>
       </div>
     </div>
+
+    <div class="panel">
+      <div class="panel-title">PLAYER INFLUENCE<span class="dim">政府への影響力</span></div>
+      <div class="gauge-wrap">
+        <svg width="72" height="72" viewBox="0 0 72 72">
+          <circle cx="36" cy="36" r="30" fill="none" stroke="#232C3B" stroke-width="7"/>
+          <circle cx="36" cy="36" r="30" fill="none" stroke="url(#pg)" stroke-width="7" stroke-linecap="round"
+            stroke-dasharray="${2*Math.PI*30}" stroke-dashoffset="${2*Math.PI*30*(1-inf.total/100)}"
+            transform="rotate(-90 36 36)"/>
+          <defs><linearGradient id="pg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#9C8CF0"/><stop offset="100%" stop-color="#E8B84B"/></linearGradient></defs>
+          <text x="36" y="41" text-anchor="middle" font-family="IBM Plex Mono" font-size="17" fill="#E7ECF3" font-weight="600">${inf.total.toFixed(0)}</text>
+        </svg>
+        <div class="gauge-desc">${influenceTierLabel(inf.total)}<br>経済・企業・メディア・政策活動の4つの経路から積み上がる。現金を払うだけでは上がらない。</div>
+      </div>
+      <div style="margin-top:10px;">
+        ${[["経済影響",inf.econ],["企業影響",inf.corp],["メディア影響",inf.media],["政策活動",inf.policy]].map(([label,v])=>`
+          <div style="margin-bottom:7px;">
+            <div class="flex-between"><span class="row-sub">${label}</span><span class="mono" style="font-size:11px;">${v.toFixed(0)}</span></div>
+            <div class="pillbar"><div style="width:${v}%;background:var(--purple);"></div></div>
+          </div>
+        `).join('')}
+      </div>
+      <hr class="sep">
+      <div class="flex-between">
+        <div>
+          <div class="row-title">${pol.name}（${pol.title}）</div>
+          <div class="row-sub">支持率 ${pol.approval.toFixed(0)}% ・ プレイヤーとの関係 ${pol.relation.toFixed(0)}/100</div>
+        </div>
+      </div>
+      <label class="field-label" style="margin-top:10px;">ロビー活動・シンクタンク支援額（兆円）</label>
+      <input type="number" id="lobby-amount" min="0" step="0.5" value="3"/>
+      <button class="btn ghost block" id="btn-lobby" style="margin-top:8px;">ロビー活動を実施</button>
+      ${inf.total>=75?`<button class="btn primary block" id="btn-negotiate" style="margin-top:8px;">非公開交渉を持ちかける</button>`:`<div class="row-sub" style="margin-top:8px;">影響力75以上で非公開交渉が可能になります。</div>`}
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">政策提案</div>
+      ${eligiblePolicies.map(p=>{
+        const locked=inf.total<p.minInfluence;
+        return `<div class="row">
+          <div class="row-main">
+            <div class="row-title">${escapeHtml(p.name)} <span class="tag ${locked?'warn':'info'}">${p.category}</span></div>
+            <div class="row-sub">${escapeHtml(p.desc)}</div>
+            <div class="row-sub">必要影響力 ${p.minInfluence} ・ コスト ${fmtYen(p.cost)}</div>
+          </div>
+          <div class="row-right"><button class="btn ${locked?'ghost':'primary'} btn-sm" data-propose="${p.id}" ${locked?'disabled':''}>提案</button></div>
+        </div>`;
+      }).join('')}
+    </div>
+
     <div class="panel">
       <div class="panel-title">市民の声<button class="btn ghost" id="btn-ai-voice" style="font-size:11px;padding:6px 10px;">✨ AIで生成</button></div>
       <div id="voice-list">
-        ${voices.map(v=>`<div class="voice-card"><div class="voice-role">${v.role}</div><div class="voice-text">${escapeHtml(v.text)}</div></div>`).join('')}
+        ${voiceState.voices.map(v=>`<div class="voice-card"><div class="voice-role">${escapeHtml(v.role)}${voiceState.source==='ai'?' <span class="dim" style="font-weight:400;">AI生成</span>':''}</div><div class="voice-text">${escapeHtml(v.text)}</div></div>`).join('')}
       </div>
     </div>
   `;
   wireCommon(el);
   document.getElementById('country-select').addEventListener('change',e=>{ G.uiCountry=e.target.value; renderPeople(); });
+  document.getElementById('btn-lobby').addEventListener('click',()=>{
+    const amt=parseFloat(document.getElementById('lobby-amount').value)||0;
+    const r=lobbyActivity(country.id,amt);
+    if(r.ok){ toast("ロビー活動を実施しました"); renderAll(); } else toast(r.msg);
+  });
+  const negoBtn=document.getElementById('btn-negotiate');
+  if(negoBtn) negoBtn.addEventListener('click',()=>openNegotiationModal(country.id));
+  el.querySelectorAll('[data-propose]').forEach(b=>b.addEventListener('click',()=>{
+    const r=proposePolicy(country.id,b.dataset.propose);
+    if(r.ok){ openPolicyResultModal(r); renderAll(); } else toast(r.msg);
+  }));
   document.getElementById('btn-ai-voice').addEventListener('click', async ()=>{
     const btn=document.getElementById('btn-ai-voice');
     const list=document.getElementById('voice-list');
@@ -2705,6 +3253,7 @@ function renderPeople(){
     list.innerHTML=`<div class="loading-dots">AIが${country.name}の国民の声を生成しています…</div>`;
     try{
       const aiVoices=await generateAIVoices(country);
+      G.voiceViewCache[country.id]={source:'ai', voices:aiVoices, day:G.day};
       list.innerHTML=aiVoices.map(v=>`<div class="voice-card"><div class="voice-role">${escapeHtml(v.role)} <span class="dim" style="font-weight:400;">AI生成</span></div><div class="voice-text">${escapeHtml(v.text)}</div></div>`).join('');
     }catch(err){
       console.error(err);
@@ -2713,6 +3262,48 @@ function renderPeople(){
     }
     btn.disabled=false; btn.textContent="✨ AIで生成";
   });
+}
+function influenceTierLabel(v){
+  if(v>=90) return "国家レベルの極めて強い影響力";
+  if(v>=75) return "政府がプレイヤーの意向を強く意識";
+  if(v>=50) return "政府の重要政策に強い影響";
+  if(v>=25) return "政策への影響力が発生";
+  if(v>=10) return "一部の政策関係者に認知される";
+  return "ほぼ影響なし";
+}
+function openPolicyResultModal(r){
+  const stars="★".repeat(r.stars)+"☆".repeat(5-r.stars);
+  openModal(`
+    <div class="panel-title">${r.success?'政策成立':'政策見送り'}</div>
+    <div class="row-title" style="margin-bottom:10px;">「${escapeHtml(r.policyName)}」${r.success?'が可決されました':'は見送られました'}</div>
+    <div class="row-sub" style="margin-bottom:10px;">成功確率は${(r.chance*100).toFixed(0)}%でした。</div>
+    <div class="section-label">発生要因</div>
+    ${r.factors.map(f=>`<div class="row"><div class="row-main row-title">${escapeHtml(f.label)}</div><div class="row-right row-val">${escapeHtml(f.value)}</div></div>`).join('')}
+    <div class="section-label">あなたの影響度</div>
+    <div class="gold" style="font-size:20px;letter-spacing:2px;">${stars}</div>
+    <button class="btn primary block" id="btn-close-policy" style="margin-top:16px;">閉じる</button>
+  `);
+  openModalKind='settings'; openModalCompanyId=null;
+  document.getElementById('btn-close-policy').addEventListener('click',closeModal);
+}
+function openNegotiationModal(countryId){
+  const c=G.countries.find(x=>x.id===countryId);
+  if(!c) return;
+  const scenarioIdx=randInt(0,NEGOTIATION_SCENARIOS.length-1);
+  const scenario=NEGOTIATION_SCENARIOS[scenarioIdx];
+  openModalKind='settings'; openModalCompanyId=null;
+  openModal(`
+    <div class="panel-title">非公開交渉 — ${c.flag}${c.name}</div>
+    <div class="voice-card" style="margin-top:10px;"><div class="voice-role">${escapeHtml(c.politician.title)}側</div><div class="voice-text">「${escapeHtml(scenario.gov)}」</div></div>
+    <div class="section-label">あなたの回答</div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      ${scenario.choices.map((ch,i)=>`<button class="btn ${ch.key==='reject'?'ghost':'primary'} block" data-choice="${i}">${escapeHtml(ch.label)}${ch.cost>0?`（${fmtYen(ch.cost)}）`:''}</button>`).join('')}
+    </div>
+  `);
+  document.querySelectorAll('[data-choice]').forEach(b=>b.addEventListener('click',()=>{
+    const r=resolveNegotiation(countryId, scenarioIdx, parseInt(b.dataset.choice,10));
+    if(r.ok){ closeModal(); toast("交渉結果が反映されました"); renderAll(); } else toast(r.msg);
+  }));
 }
 
 /* =========================================================================
@@ -2758,9 +3349,11 @@ function renderOrderBook(co, book){
   return html;
 }
 
-function openCompanyModal(coId){
+function openCompanyModal(coId, opts){
+  opts=opts||{};
   const co=G.companies.find(c=>c.id===coId);
   if(!co) return;
+  openModalKind='company'; openModalCompanyId=coId;
   if(G.tutorial && G.tutorial.active && coId===G.tutorial.novaId){ G.tutorial.flags.viewedNova=true; }
   const pct=ownershipPct(co);
   const shOwned=hShares(co.id);
@@ -2908,12 +3501,18 @@ function openCompanyModal(coId){
 }
 
 function openSettingsModal(){
+  openModalKind='settings'; openModalCompanyId=null;
+  const dateInfo=formatGameDate(G.day);
   openModal(`
     <div class="panel-title">設定</div>
-    <div class="section-label">セーブデータ</div>
-    <div class="btn-row">
+    <div class="section-label">現在の世界</div>
+    <div class="row-sub">WORLD ${String(currentSlot).padStart(2,'0')} ・ ${dateInfo.text} ・ プレイ時間 ${formatPlayTime(G.player.playTimeSeconds)}</div>
+    <div class="btn-row" style="margin-top:10px;">
       <button class="btn ghost block" id="btn-save-now">今すぐ保存</button>
-      <button class="btn danger block" id="btn-reset">リセット</button>
+      <button class="btn primary block" id="btn-open-saveload">セーブ・ロード</button>
+    </div>
+    <div class="btn-row" style="margin-top:8px;">
+      <button class="btn danger block" id="btn-reset">この世界をリセット</button>
     </div>
     <div class="section-label">チュートリアル</div>
     <button class="btn ghost block" id="btn-start-tutorial">チュートリアルを開始する</button>
@@ -2924,7 +3523,12 @@ function openSettingsModal(){
     </div>
     ${G.debug?`
       <hr class="sep">
-      <label class="field-label">現金を設定（兆円）</label>
+      <div class="section-label" style="margin-top:0;">セーブデータ診断</div>
+      <button class="btn ghost block" id="dbg-integrity">整合性チェックを実行</button>
+      <button class="btn ghost block" id="dbg-showdata" style="margin-top:8px;">現在のセーブデータ情報を表示</button>
+      <button class="btn ghost block" id="dbg-backup-now" style="margin-top:8px;">手動でバックアップを作成</button>
+      <div id="dbg-diag-output" class="row-sub" style="margin-top:8px;white-space:pre-wrap;"></div>
+      <label class="field-label" style="margin-top:8px;">現金を設定（兆円）</label>
       <input type="number" id="dbg-cash" value="${G.player.cash.toFixed(1)}" />
       <button class="btn ghost block" id="dbg-set-cash" style="margin-top:8px;">反映する</button>
       <div class="section-label">時間を一気に進める</div>
@@ -2932,6 +3536,7 @@ function openSettingsModal(){
         <button data-jump="30">+30日</button>
         <button data-jump="90">+90日</button>
         <button data-jump="365">+1年</button>
+        <button data-jump="3650">+10年</button>
       </div>
       <div class="section-label">危機を発生させる</div>
       <button class="btn ghost block" id="dbg-crisis">ランダムな危機を発生</button>
@@ -2940,9 +3545,10 @@ function openSettingsModal(){
       <button class="btn ghost block" id="dbg-collapse" style="margin-top:8px;">選択国を崩壊させる</button>
     `:''}
     <div class="section-label" style="margin-top:20px;">このゲームについて</div>
-    <div class="row-sub">GLOBAL CAPITALを率い、世界経済に介入する神視点シミュレーション。目的は自由——世界を発展させても、支配しても、破壊してもいい。ローソク足は日単位のゲーム内時間をもとに生成されており、分足・時間足は日足を基準に簡略化しています。</div>
+    <div class="row-sub">GLOBAL CAPITALを率い、世界経済に介入する神視点シミュレーション。目的は自由——世界を発展させても、支配しても、破壊してもいい。ローソク足は日単位のゲーム内時間をもとに生成されており、分足・時間足は日足を基準に簡略化しています。セーブデータはブラウザ・デバイスに紐づく形で自動保存されます。</div>
   `);
   document.getElementById('btn-save-now').addEventListener('click',()=>{ saveGame(); toast("保存しました"); });
+  document.getElementById('btn-open-saveload').addEventListener('click', openSaveLoadModal);
   document.getElementById('btn-start-tutorial').addEventListener('click',()=>{
     startTutorial();
     closeModal();
@@ -2952,7 +3558,7 @@ function openSettingsModal(){
     toast("チュートリアルを開始しました");
   });
   document.getElementById('btn-reset').addEventListener('click',()=>{
-    if(confirm("本当にリセットしますか？進行状況はすべて失われます。")){ closeModal(); resetGame(); }
+    if(confirm("本当にリセットしますか？この世界の進行状況はすべて失われます。")){ closeModal(); resetGame(); }
   });
   document.querySelectorAll('[data-dbg]').forEach(b=>b.addEventListener('click',()=>{
     G.debug=b.dataset.dbg==="on"; saveGame(); openSettingsModal();
@@ -2978,6 +3584,92 @@ function openSettingsModal(){
     if(c) triggerCollapse(c);
     saveGame(); closeModal(); renderAll(); toast("国家崩壊を発生させました");
   });
+  const integrityBtn=document.getElementById('dbg-integrity');
+  if(integrityBtn) integrityBtn.addEventListener('click',()=>{
+    const r=runIntegrityCheck();
+    const out=document.getElementById('dbg-diag-output');
+    out.textContent = r.ok ? "✓ 問題は見つかりませんでした。" : "⚠ 検出された問題:\n"+r.issues.slice(0,10).join('\n');
+  });
+  const showDataBtn=document.getElementById('dbg-showdata');
+  if(showDataBtn) showDataBtn.addEventListener('click',()=>{
+    const json=JSON.stringify(G);
+    const kb=(json.length/1024).toFixed(1);
+    const out=document.getElementById('dbg-diag-output');
+    out.textContent=`スロット: WORLD ${String(currentSlot).padStart(2,'0')}\n保存バージョン: v${CURRENT_SAVE_VERSION}\nゲーム内日時: ${formatGameDate(G.day).text}\nデータサイズ: 約${kb}KB\n企業数: ${G.companies.length}\n国家数: ${G.countries.length}\nニュース件数: ${G.news.length}\n年表イベント数: ${G.history.length}`;
+  });
+  const backupNowBtn=document.getElementById('dbg-backup-now');
+  if(backupNowBtn) backupNowBtn.addEventListener('click', async ()=>{
+    await saveGame({forceBackup:true});
+    const out=document.getElementById('dbg-diag-output');
+    out.textContent="バックアップを作成して保存しました。";
+    toast("バックアップを作成しました");
+  });
+}
+function openSaveLoadModal(){
+  openModalKind='settings'; openModalCompanyId=null;
+  openModal(`<div class="panel-title">セーブ・ロード</div><div class="loading-dots">読み込み中…</div>`);
+  (async ()=>{
+    const slots=await listSaveSlots();
+    const html=`
+      <div class="panel-title">セーブ・ロード</div>
+      <div class="row-sub" style="margin-bottom:12px;">複数の世界を並行して保持できます。ロードすると現在プレイ中の世界からそのスロットへ切り替わります（現在の世界は自動保存済みです）。</div>
+      ${slots.map(s=>`
+        <div class="panel" style="background:var(--panel2);margin-bottom:10px;padding:12px;">
+          <div class="flex-between">
+            <div class="row-title">WORLD ${String(s.slot).padStart(2,'0')} ${s.slot===currentSlot?'<span class="tag control">プレイ中</span>':''}</div>
+          </div>
+          ${s.meta?`
+            <div class="row-sub" style="margin-top:4px;">${s.meta.dateText} ・ プレイ時間 ${formatPlayTime(s.meta.playTimeSeconds)}</div>
+            <div class="grid3" style="margin-top:8px;">
+              <div class="metric-box"><div class="lbl">資産</div><div class="val gold">${fmtYen(s.meta.netWorth)}</div></div>
+              <div class="metric-box"><div class="lbl">支配企業</div><div class="val">${s.meta.companiesControlled}社</div></div>
+              <div class="metric-box"><div class="lbl">影響国家</div><div class="val">${s.meta.countriesInfluenced}ヶ国</div></div>
+            </div>
+            <div class="btn-row" style="margin-top:10px;">
+              <button class="btn primary btn-sm" data-load-slot="${s.slot}" ${s.slot===currentSlot?'disabled':''}>LOAD</button>
+              <button class="btn danger btn-sm" data-delete-slot="${s.slot}">削除</button>
+            </div>
+          `:`
+            <div class="row-sub" style="margin-top:4px;">空きスロット</div>
+            <button class="btn ghost btn-sm" data-newworld-slot="${s.slot}" style="margin-top:8px;">この枠に新しい世界を作る</button>
+          `}
+        </div>
+      `).join('')}
+    `;
+    document.getElementById('modal-body').innerHTML=html;
+    document.querySelectorAll('[data-load-slot]').forEach(b=>b.addEventListener('click', async ()=>{
+      const n=parseInt(b.dataset.loadSlot,10);
+      if(!confirm(`WORLD ${String(n).padStart(2,'0')} をロードしますか？`)) return;
+      await saveGame();
+      const r=await loadSlot(n);
+      if(r.ok){
+        if(r.restoredFromBackup) toast('セーブデータに問題があったため、バックアップから復元しました');
+        recalcWorldPower();
+        closeModal();
+        switchScreen('world');
+        renderTopbar();
+        toast(`WORLD ${String(n).padStart(2,'0')} をロードしました`);
+      } else toast('ロードに失敗しました');
+    }));
+    document.querySelectorAll('[data-newworld-slot]').forEach(b=>b.addEventListener('click', async ()=>{
+      const n=parseInt(b.dataset.newworldSlot,10);
+      if(!confirm(`WORLD ${String(n).padStart(2,'0')} に新しい世界を作成しますか？`)) return;
+      await startNewWorldInSlot(n);
+      closeModal();
+      const step=tutorialCurrentStep();
+      if(step && step.targetScreen) switchScreen(step.targetScreen); else switchScreen('world');
+      renderTopbar();
+      renderTutorialUI();
+      toast(`WORLD ${String(n).padStart(2,'0')} を作成しました`);
+    }));
+    document.querySelectorAll('[data-delete-slot]').forEach(b=>b.addEventListener('click', async ()=>{
+      const n=parseInt(b.dataset.deleteSlot,10);
+      if(n===currentSlot){ toast('プレイ中のスロットは削除できません'); return; }
+      if(!confirm(`WORLD ${String(n).padStart(2,'0')} を完全に削除します。よろしいですか？`)) return;
+      await deleteSlot(n);
+      openSaveLoadModal();
+    }));
+  })();
 }
 
 /* =========================================================================
@@ -3007,15 +3699,106 @@ function toggleAutoplay(){
    26. BOOT
    ========================================================================= */
 async function boot(){
-  const loaded=await loadGame();
-  if(!loaded){
+  await migrateLegacySaveIfNeeded();
+  const slots=await listSaveSlots();
+  const existing=slots.filter(s=>s.meta);
+  if(existing.length===0){
+    currentSlot=1;
     G=initWorld();
     recalcWorldPower();
     startTutorial();
-    saveGame();
-  } else {
-    recalcWorldPower();
+    await saveGame();
+    await initApp();
+    return;
   }
+  const activeRaw=await storageGet(ACTIVE_SLOT_KEY);
+  let activeSlotNum = activeRaw? parseInt(activeRaw,10) : existing[0].slot;
+  if(!slots.find(s=>s.slot===activeSlotNum && s.meta)) activeSlotNum=existing[0].slot;
+  showBootChoiceScreen(activeSlotNum, slots);
+}
+function formatPlayTime(sec){
+  sec=sec||0;
+  const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60);
+  if(h<=0) return `${m}分`;
+  return `${h}時間${m}分`;
+}
+function bootScreenHtml(activeSlotNum, allSlots){
+  const meta=(allSlots.find(s=>s.slot===activeSlotNum)||{}).meta;
+  return `
+    <div class="tut-badge">CONTINUE</div>
+    <div class="tut-lines">
+      <div class="tut-line">WORLD ${String(activeSlotNum).padStart(2,'0')}</div>
+      <div class="tut-line small">${meta?meta.dateText:''}</div>
+    </div>
+    <div class="tut-summary-table">
+      <div class="tut-summary-row"><span>総資産</span><span class="mono gold">${meta?fmtYen(meta.netWorth):'-'}</span></div>
+      <div class="tut-summary-row"><span>支配企業</span><span class="mono">${meta?meta.companiesControlled:'-'}社</span></div>
+      <div class="tut-summary-row"><span>影響国家</span><span class="mono">${meta?meta.countriesInfluenced:'-'}ヶ国</span></div>
+      <div class="tut-summary-row"><span>国家崩壊</span><span class="mono">${meta?meta.countriesCollapsed:'-'}ヶ国</span></div>
+      <div class="tut-summary-row"><span>プレイ時間</span><span class="mono">${meta?formatPlayTime(meta.playTimeSeconds):'-'}</span></div>
+    </div>
+    <div class="tut-actions">
+      <button class="btn primary" id="boot-continue" style="padding:13px 34px;">CONTINUE</button>
+      <button class="btn ghost" id="boot-newworld" style="padding:11px 28px;">NEW WORLD</button>
+    </div>
+  `;
+}
+function slotPickerHtml(allSlots, title){
+  return `
+    <div class="tut-badge">${title||'NEW WORLD'}</div>
+    <div class="tut-lines"><div class="tut-line small">スロットを選んでください。既存の世界を選ぶと上書きされます。</div></div>
+    <div style="display:flex;flex-direction:column;gap:10px;width:100%;max-width:440px;margin-top:12px;">
+    ${allSlots.map(s=>`
+      <button class="btn ${s.meta?'ghost':'primary'} block" data-slot-pick="${s.slot}" style="text-align:left;padding:14px;">
+        <div style="font-weight:700;">WORLD ${String(s.slot).padStart(2,'0')}</div>
+        <div style="font-size:11px;color:var(--dim);margin-top:3px;">${s.meta? `${s.meta.dateText} ・ ${fmtYen(s.meta.netWorth)}（上書きされます）` : '空きスロット'}</div>
+      </button>
+    `).join('')}
+    </div>
+    <button class="tut-skip" id="boot-back" style="margin-top:16px;">戻る</button>
+  `;
+}
+function showBootChoiceScreen(activeSlotNum, allSlots){
+  const overlay=document.getElementById('boot-screen');
+  overlay.style.display='flex';
+  function renderContinueView(){
+    overlay.innerHTML=`<div class="tut-wrap">${bootScreenHtml(activeSlotNum, allSlots)}</div>`;
+    document.getElementById('boot-continue').addEventListener('click', async ()=>{
+      const r=await loadSlot(activeSlotNum);
+      if(r.ok){
+        if(r.restoredFromBackup) toast('セーブデータに問題があったため、バックアップから復元しました');
+        recalcWorldPower();
+      } else {
+        toast('セーブデータの読み込みに失敗しました。新しい世界を開始します');
+        await startNewWorldInSlot(activeSlotNum);
+      }
+      overlay.style.display='none';
+      await initApp();
+    });
+    document.getElementById('boot-newworld').addEventListener('click', renderPickerView);
+  }
+  function renderPickerView(){
+    overlay.innerHTML=`<div class="tut-wrap">${slotPickerHtml(allSlots)}</div>`;
+    overlay.querySelectorAll('[data-slot-pick]').forEach(b=>b.addEventListener('click', async ()=>{
+      const n=parseInt(b.dataset.slotPick,10);
+      const info=allSlots.find(s=>s.slot===n);
+      if(info && info.meta){
+        if(!confirm(`WORLD ${String(n).padStart(2,'0')} を上書きします。よろしいですか？`)) return;
+      }
+      await startNewWorldInSlot(n);
+      overlay.style.display='none';
+      await initApp();
+    }));
+    document.getElementById('boot-back').addEventListener('click', renderContinueView);
+  }
+  renderContinueView();
+}
+function startBackgroundTimers(){
+  setInterval(()=>{ if(G && G.player){ G.player.playTimeSeconds=(G.player.playTimeSeconds||0)+5; } }, 5000);
+  setInterval(()=>{ if(G) saveGame(); }, 60000);
+  window.addEventListener('beforeunload',()=>{ if(G) saveGame(); });
+}
+async function initApp(){
   document.querySelectorAll('.navbtn').forEach(b=>b.addEventListener('click',()=>switchScreen(b.dataset.screen)));
   document.getElementById('modal-backdrop').addEventListener('click',closeModal);
   document.getElementById('modal-close-btn').addEventListener('click',closeModal);
@@ -3025,6 +3808,7 @@ async function boot(){
     if(step && step.targetScreen) switchScreen(step.targetScreen);
   }
   renderAll();
+  startBackgroundTimers();
 }
 boot();
 
