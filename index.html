@@ -437,6 +437,7 @@ const PERSONA_BY_COUNTRY={
 };
 function pickPersona(countryName){ return PERSONA_BY_COUNTRY[countryName] || pick(AI_PERSONAS).key; }
 
+const SECTOR_GROWTH_PREMIUM={AI:5,半導体:4,IT:3.5,バイオ:3,宇宙:2.2,精密機械:1.8,エネルギー:1.5,自動車:1.5,メディア:1.3,軍需:1.2,鉱業:1.1,物流:1,製造:1,金融:0.9,化学:0.9,建設:0.8,造船:0.7,小売:0.7,食品:0.6,農業:0.5};
 const SECTOR_SUFFIX={
  "IT":["システムズ","テクノロジーズ","ソフトウェア","デジタル"],
  "AI":["インテリジェンス","AIラボ","コグニション"],
@@ -548,7 +549,7 @@ function freshState(){
     player:{
       cash:100,
       holdings:{}, strategies:{},
-      realEstate:[], plants:[], bank:null, patents:[], resourceHoldings:[],
+      realEstate:[], plants:[], bank:null, patents:[], resourceHoldings:[], resourceRights:[],
       worldPower:0,
       history:[{day:0,netWorth:100}],
       recentActions:[],
@@ -559,10 +560,11 @@ function freshState(){
     macro:{ oilPrice:100, globalSentiment:0, globalRate:3.5, bubbleRisk:0, tradeMomentum:0 },
     crisis:null,
     news:[], sns:[], voiceLog:{}, voiceViewCache:{},
+    resourceMonopoly:{},
     debug:false,
     uiCountry:null, uiSector:"all", uiMarketFilter:"all",
     uiWorldTab:"overview", uiBizTab:"holdings", uiMnaTab:"company", uiChartTf:"day",
-    uiInfraCountry:null, uiResResource:"oil", uiResCountry:null,
+    uiInfraCountry:null, uiResResource:"oil", uiResCountry:null, uiRightResource:"oil", uiRightCountry:null,
     uiFoundCountry:null, uiFoundSector:"AI", uiFoundTier:"small",
     uiNationTab:"overview", uiWarTarget:null, uiDiploTarget:null,
     uiMapMode:"political", uiMapZoom:1, uiMapPan:{x:0,y:0}, uiMapSelected:null,
@@ -655,7 +657,24 @@ function initWorld(){
     }
   });
 
+  computeResourceCountryShares(s);
   return s;
+}
+function computeResourceCountryShares(s){
+  s.resources.forEach(r=>{
+    const weights=s.countries.map(c=>{
+      const spec=RESOURCE_SPECIALIZATION[c.name];
+      const isSpecialist = spec && spec[r.id]!==undefined;
+      const mod=(c.resourceMod&&c.resourceMod[r.id])||1;
+      let w;
+      if(isSpecialist){ w = Math.pow(1/Math.max(mod,0.2),3) * (c.major?1:0.6); }
+      else { w = 0.12 * (c.major?1:0.5) * (mod<1?1.3:0.7); }
+      return {id:c.id, w};
+    });
+    const total=weights.reduce((a,w)=>a+w.w,0)||1;
+    r.countryShares={};
+    weights.forEach(w=>{ r.countryShares[w.id]=Math.round((w.w/total)*1000)/10; });
+  });
 }
 function buildResourceMod(countryName){
   const spec=RESOURCE_SPECIALIZATION[countryName]||{};
@@ -677,6 +696,8 @@ function migrateState(s){
   const fromVersion=s.version||1;
   s.version=CURRENT_SAVE_VERSION;
   s.resources=s.resources&&s.resources.length? s.resources : RESOURCES.map(r=>({id:r.id,name:r.name,unit:r.unit,base:r.base,price:r.base,vol:r.vol}));
+  if(!s.resources[0] || !s.resources[0].countryShares) computeResourceCountryShares(s);
+  s.resourceMonopoly=s.resourceMonopoly||{};
   s.realEstateListings=s.realEstateListings||[];
   s.contracts=s.contracts||[];
   s.chainQueue=s.chainQueue||[];
@@ -691,11 +712,13 @@ function migrateState(s){
   });
   s.uiWorldTab=s.uiWorldTab||"overview"; s.uiBizTab=s.uiBizTab||"holdings"; s.uiMnaTab=s.uiMnaTab||"company"; s.uiChartTf=s.uiChartTf||"day";
   s.uiInfraCountry=s.uiInfraCountry||null; s.uiResResource=s.uiResResource||"oil"; s.uiResCountry=s.uiResCountry||null;
+  s.uiRightResource=s.uiRightResource||"oil"; s.uiRightCountry=s.uiRightCountry||null;
   s.uiFoundCountry=s.uiFoundCountry||null; s.uiFoundSector=s.uiFoundSector||"AI"; s.uiFoundTier=s.uiFoundTier||"small";
   s.uiNationTab=s.uiNationTab||"overview"; s.uiWarTarget=s.uiWarTarget||null; s.uiDiploTarget=s.uiDiploTarget||null;
   s.uiMapMode=s.uiMapMode||"political"; s.uiMapZoom=s.uiMapZoom||1; s.uiMapPan=s.uiMapPan||{x:0,y:0}; s.uiMapSelected=s.uiMapSelected||null;
   const p=s.player;
   p.realEstate=p.realEstate||[]; p.plants=p.plants||[]; p.bank=p.bank||null; p.patents=p.patents||[]; p.resourceHoldings=p.resourceHoldings||[];
+  p.resourceRights=p.resourceRights||[];
   p.impact=p.impact||{totalInvested:0,jobsCreated:0,jobsLost:0,crisesTriggered:0,nationsCollapsed:0,nationsSaved:0,companiesFounded:0};
   p.milestones=p.milestones||{power:[]};
   p.recentActions=p.recentActions||[];
@@ -1191,9 +1214,21 @@ function updateCountryStability(c, days){
   if(c.collapsed){
     c.collapseRemaining-=days;
     if(c.collapseRemaining<=0){
-      c.collapsed=false; c.stability=35; c.unrest=clamp(c.unrest-30,0,100);
+      // A recovering government needs more than a stability/unrest reset — the underlying
+      // drivers (poverty, inflation, low government support, high tension) that fed the
+      // collapse must also improve, or the very next stability calculation immediately
+      // targets ~0 again and the country falls straight back into collapse within the same
+      // simulated year. Model this as emergency reforms / currency reform / foreign aid
+      // accompanying the new government, not just a cosmetic status flip.
+      c.collapsed=false; c.stability=35;
+      c.unrest=clamp(c.unrest-40,0,100);
+      c.poverty=clamp(c.poverty-15,1,70);
+      c.inflation=clamp(c.inflation*0.5,0,15);
+      c.govSupport=clamp(c.govSupport+25,0,100);
+      c.tension=clamp((c.tension||0)-30,0,100);
+      c.inequality=clamp(c.inequality-5,5,85);
       c.growthTendency=rand(1,3); c.gdpGrowth=rand(0.5,2);
-      pushNews("復興",`${c.flag}${c.name}で新政府が樹立され、復興が始まった。`,"world",true);
+      pushNews("復興",`${c.flag}${c.name}で新政府が樹立され、復興が始まった。緊急経済改革により生活は徐々に落ち着きを取り戻しつつある。`,"world",true);
       addHistory(`${c.flag}${c.name}で新政府が樹立され、復興が始まった。`);
       if((c.infraInvested||0)>0) G.player.impact.nationsSaved++;
     }
@@ -1739,6 +1774,151 @@ function sellResourceHolding(holdingId, sellCountryId){
   return {ok:true, revenue};
 }
 
+/* =========================================================================
+   9b. RESOURCE MONOPOLY SYSTEM
+   Each resource's world output is allocated across producing countries
+   (RESOURCES x countryShares, weighted by production specialization). The
+   player can buy production rights in a specific country's output; their
+   world share is the sum, across all countries, of (that country's world
+   share × the player's stake in that country's production). At 50/70/90%
+   world share, market-control actions unlock — cutting supply raises the
+   global price and triggers an inflation → rates → stocks → jobs chain,
+   with producer nations benefiting and import-dependent nations hurt worse.
+   Governments fight back the higher the player's share climbs.
+   ========================================================================= */
+function resourceRightsCostForShare(resource, country, pctOfCountryShare){
+  const worldShare=(resource.countryShares&&resource.countryShares[country.id])||0.5;
+  const base=country.gdp*0.006*(worldShare/10)*(resource.base/70);
+  return clamp(base*(pctOfCountryShare/100),0.3,600);
+}
+function acquireResourceRights(resourceId, countryId, pctOfCountryShare){
+  const resource=G.resources.find(r=>r.id===resourceId);
+  const country=G.countries.find(c=>c.id===countryId);
+  if(!resource||!country) return {ok:false,msg:"データが見つかりません"};
+  pctOfCountryShare=clamp(pctOfCountryShare,1,100);
+  const existing=G.player.resourceRights.find(r=>r.resource===resourceId && r.countryId===countryId);
+  const currentPct=existing?existing.pctOfCountryShare:0;
+  const addPct=pctOfCountryShare-currentPct;
+  if(addPct<=0) return {ok:false,msg:"既にそれ以上の権益を保有しています"};
+  const cost=resourceRightsCostForShare(resource,country,addPct);
+  if(cost>G.player.cash) return {ok:false,msg:`資金が不足しています（必要 ${fmtYen(cost)}）`};
+  G.player.cash-=cost;
+  if(existing){ existing.pctOfCountryShare=pctOfCountryShare; existing.cost=(existing.cost||0)+cost; }
+  else G.player.resourceRights.push({id:uid('rr'),resource:resourceId,countryId,countryName:country.name,flag:country.flag,pctOfCountryShare,cost,acquiredDay:G.day});
+  G.player.impact.totalInvested+=cost;
+  pushNews("資源権益取得",`GLOBAL CAPITALが${country.flag}${country.name}の${resource.name}生産に対する権益（同国生産量の${pctOfCountryShare.toFixed(0)}%）を取得した。`,"world");
+  checkResourceMonopolyFlags(resourceId);
+  saveGame();
+  return {ok:true};
+}
+function playerResourceWorldShare(resourceId){
+  const resource=G.resources.find(r=>r.id===resourceId);
+  if(!resource) return 0;
+  let share=0;
+  G.player.resourceRights.filter(r=>r.resource===resourceId).forEach(r=>{
+    const countryWorldShare=(resource.countryShares&&resource.countryShares[r.countryId])||0;
+    share+=countryWorldShare*(r.pctOfCountryShare/100);
+  });
+  return clamp(share,0,100);
+}
+function resourceMonopolyTierLabel(pct){
+  if(pct>=90) return "事実上の独占";
+  if(pct>=70) return "強力な市場支配";
+  if(pct>=50) return "市場支配";
+  if(pct>=25) return "有力な供給者";
+  if(pct>0) return "一供給者";
+  return "権益なし";
+}
+function checkResourceMonopolyFlags(resourceId){
+  const share=playerResourceWorldShare(resourceId);
+  const state=G.resourceMonopoly[resourceId]=G.resourceMonopoly[resourceId]||{lastTierFlag:0,regulatedUntil:0};
+  [50,70,90].forEach(t=>{
+    if(share>=t && state.lastTierFlag<t){
+      state.lastTierFlag=t;
+      const resource=G.resources.find(r=>r.id===resourceId);
+      pushNews("資源支配",`GLOBAL CAPITALが世界の${resource?resource.name:''}供給の${t}%を支配下に置いた（${resourceMonopolyTierLabel(share)}）。各国政府が警戒を強めている。`,"world",true);
+      addHistory(`GLOBAL CAPITALが世界${resource?resource.name:''}供給の${t}%を支配した。`);
+    }
+  });
+}
+function cutResourceSupply(resourceId, cutPct){
+  const resource=G.resources.find(r=>r.id===resourceId);
+  if(!resource) return {ok:false,msg:"データが見つかりません"};
+  const share=playerResourceWorldShare(resourceId);
+  if(share<50) return {ok:false,msg:"市場支配（50%以上）が必要です"};
+  const state=G.resourceMonopoly[resourceId]=G.resourceMonopoly[resourceId]||{lastTierFlag:0,regulatedUntil:0};
+  if(state.regulatedUntil>G.day) return {ok:false,msg:"現在、規制当局の監視下にあり供給操作はできません"};
+  cutPct=clamp(cutPct,5,40);
+  const priceImpactPct=cutPct*rand(1.4,2.2)*(share/100);
+  resource.price=clamp(resource.price*(1+priceImpactPct/100),resource.base*0.3,resource.base*6);
+  pushNews("供給操作",`GLOBAL CAPITALが${resource.name}の供給量を${cutPct.toFixed(0)}%削減した。世界市場は騒然としている。`,"world",true);
+  pushSNS(`GLOBAL CAPITALが${resource.name}の供給を絞ったらしい…また値上がりする。`,"⛽","market_watch");
+  addHistory(`GLOBAL CAPITALが${resource.name}の供給量を${cutPct.toFixed(0)}%削減し、世界市場に衝撃を与えた。`);
+  scheduleResourceShockChain(resourceId, cutPct*share/100);
+  G.player.impact.crisesTriggered++;
+  state.regulatedUntil=Math.max(state.regulatedUntil,0); // supply cuts themselves don't trigger regulation immediately; risk checks handle that over time
+  saveGame();
+  return {ok:true};
+}
+function scheduleResourceShockChain(resourceId, magnitude){
+  const isEnergy = resourceId==='oil'||resourceId==='gas'||resourceId==='uranium';
+  const isFood = resourceId==='food'||resourceId==='water';
+  scheduleChain(G.day+6,'news_only',{head:"資源価格高騰",tag:'world',body:`供給不安を受け、${G.resources.find(r=>r.id===resourceId)?.name||'資源'}価格が高騰し続けている。輸送・生産コストへの波及が懸念されている。`});
+  scheduleChain(G.day+14,'inflation_up',{delta:clamp(magnitude*0.05,0.2,2.2),head:"物価上昇圧力",body:"資源価格の高騰を受け、世界的に物価上昇圧力が強まっている。"});
+  scheduleChain(G.day+24,'sentiment_down',{delta:clamp(magnitude*0.6,5,25),head:isEnergy?"エネルギーコスト懸念":isFood?"食料価格懸念":"原材料コスト懸念",body:"資源コストの上昇が企業収益を圧迫するとの懸念から、株式市場に売りが出ている。"});
+  scheduleChain(G.day+34,'unemployment_up',{delta:clamp(magnitude*0.03,0.2,1),head:"景気減速の兆し",body:"企業コスト増加が投資抑制につながり、雇用情勢に陰りが見え始めている。"});
+  scheduleChain(G.day+45,'unrest_up',{delta:clamp(magnitude*0.15,2,9),head:"国民生活への打撃",body:"資源価格の高騰が生活コストを押し上げ、各国で政府への不満が高まっている。"});
+  // Producer nations benefit; import-dependent nations suffer more — apply directly now
+  // (not deferred) since it represents an immediate terms-of-trade shift, not a lagged
+  // macro effect like the items above.
+  const resource=G.resources.find(r=>r.id===resourceId);
+  if(resource){
+    G.countries.forEach(c=>{
+      if(c.collapsed) return;
+      const mod=(c.resourceMod&&c.resourceMod[resourceId])||1;
+      if(mod<0.8){ // meaningful producer
+        c.gdp=c.gdp*(1+clamp(magnitude*0.001,0,0.02));
+        c.growthTendency=clamp(c.growthTendency+clamp(magnitude*0.02,0,0.6),-6,13);
+      } else if(mod>1.05){ // net importer / non-specialist, hurt more
+        c.inflation=clamp(c.inflation+clamp(magnitude*0.01,0,0.6),-2,60);
+        c.happiness=clamp(c.happiness-clamp(magnitude*0.02,0,1.2),0,100);
+      }
+    });
+  }
+}
+function checkResourceMonopolyRisk(){
+  Object.keys(G.resourceMonopoly).forEach(resourceId=>{
+    const state=G.resourceMonopoly[resourceId];
+    const share=playerResourceWorldShare(resourceId);
+    if(share<50) return;
+    if(state.regulatedUntil>G.day) return;
+    const p = share>=90?0.012 : share>=70?0.006 : 0.0025;
+    if(Math.random()<p){
+      const resource=G.resources.find(r=>r.id===resourceId);
+      const kind=pick(['antitrust','nationalize','reserve','sanction']);
+      if(kind==='antitrust'){
+        state.regulatedUntil=G.day+90;
+        pushNews("反独占調査",`${resource?resource.name:''}市場でのGLOBAL CAPITALの支配的地位を巡り、複数国の当局が反独占調査を開始した。当面、供給操作はできない。`,"world",true);
+        addHistory(`${resource?resource.name:''}市場でのGLOBAL CAPITALの独占的地位を巡り、反独占調査が始まった。`);
+      } else if(kind==='nationalize'){
+        const rights=G.player.resourceRights.filter(r=>r.resource===resourceId);
+        if(rights.length){
+          const target=pick(rights);
+          G.player.resourceRights=G.player.resourceRights.filter(r=>r.id!==target.id);
+          pushNews("資源国有化",`${target.flag}${target.countryName}政府がGLOBAL CAPITALの保有する${resource?resource.name:''}権益を国有化した。`,"world",true);
+          addHistory(`${target.flag}${target.countryName}がGLOBAL CAPITALの${resource?resource.name:''}権益を国有化した。`);
+          checkResourceMonopolyFlags(resourceId);
+        }
+      } else if(kind==='reserve'){
+        if(resource){ resource.price=Math.max(resource.base*0.5, resource.price*0.7); }
+        pushNews("戦略備蓄放出",`各国政府が協調して${resource?resource.name:''}の戦略備蓄を放出し、価格上昇に対抗した。`,"world",true);
+      } else {
+        pushNews("制裁措置",`${resource?resource.name:''}市場での影響力を理由に、複数国がGLOBAL CAPITALへの制裁措置を検討していると報じられた。`,"world");
+      }
+    }
+  });
+}
+
 function buyRealEstate(listingId){
   const idx=G.realEstateListings.findIndex(l=>l.id===listingId);
   if(idx<0) return {ok:false,msg:"物件が見つかりません"};
@@ -2007,26 +2187,52 @@ function simulateDay(){
     const collapsed=country&&country.collapsed;
     const priceBefore=co.price;
     const pctOwned=ownershipPct(co);
-    let controlBonus=0;
+    let controlGrowthBoost=0;
     if(pctOwned>=50){
       const strat=G.player.strategies[co.id]||"hold";
-      controlBonus = strat==="growth"?2.2: strat==="cost"?0.6 : strat==="rnd"?1.2 : 0.3;
+      controlGrowthBoost = strat==="growth"?2.5: strat==="cost"?0.3 : strat==="rnd"?1.0 : 0;
       if(strat==="cost") co.volatility=Math.max(0.4,co.volatility-0.01*scale);
       if(strat==="rnd") co.tech=clamp(co.tech+0.05*scale,0,100);
     }
     const sectorHitPenalty = (G.crisis && G.crisis.sectorHit===co.sector) ? -3.5 : 0;
     const collapsePenalty = collapsed? -20:0;
     const countryFactor = country ? (country.gdpGrowth-2)*0.15 : 0;
-    const dailyDrift = ( (co.growth+controlBonus)/100 ) * (1/365);
-    const sentimentFactor = (m.globalSentiment/100)*0.5*scale/7 + sectorHitPenalty*scale/30 + collapsePenalty*scale/30;
-    const noise = normRand()*(co.volatility/100)*Math.sqrt(scale);
-    const pctChange = dailyDrift + sentimentFactor + noise + countryFactor*scale/30;
-    co.prevCap=co.marketCap;
-    co.marketCap=Math.max(0.01, co.marketCap*(1+pctChange));
-    co.price=(co.marketCap*1e12)/co.shares;
+
+    // --- Fundamentals maturation (fixes the old "growth compounds price forever" bug) ---
+    // A company's growth rate itself drifts, slowly, toward a sustainable long-run level
+    // tied to its home country's GDP growth plus a sector premium (and a boost if the
+    // player is actively running it for growth). This means a young high-growth company
+    // naturally matures into a modest, stable grower over years/decades rather than
+    // compounding the same double-digit rate forever — the actual real-world pattern.
+    const matureTarget = clamp((country?country.gdpGrowth*0.7:1.5) + (SECTOR_GROWTH_PREMIUM[co.sector]||1) + controlGrowthBoost - (sectorHitPenalty!==0?2:0), -6, 13);
+    // As a company grows enormous, its sustainable growth rate decelerates (the real-world
+    // "law of large numbers" — a company can't keep compounding at a young-company's rate
+    // forever once it's already huge). This is what actually keeps 50-100 year runs bounded,
+    // rather than a small size premium alone.
+    const sizeDecay = clamp(1 - Math.log10(Math.max(co.marketCap,1))/5.5, 0.12, 1);
+    const effectiveTarget = matureTarget*sizeDecay + (co.growth<0? matureTarget*(1-sizeDecay)*0.3 : 0);
+    co.growth = clamp(co.growth + (effectiveTarget-co.growth)*0.012*scale + normRand()*0.06*scale, -15, 26);
     co.revenue=Math.max(0.01, co.revenue*(1+(co.growth/100)*(1/365)*0.6));
     co.profit=co.revenue*clamp((co.profit/Math.max(co.revenue,0.01))+normRand()*0.01,-0.15,0.28);
     co.employees=Math.max(50,Math.round(co.employees*(1+(co.growth/100)*(1/365)*0.3)));
+
+    // --- Theoretical (fundamentals-based) value, and price mean-reversion toward it ---
+    // Price is no longer driven directly by an ever-compounding drift term. Instead, an
+    // intrinsic value is computed from profit × a bounded, sentiment/rate-sensitive
+    // multiple (a P/E-like anchor), and the market price is pulled toward that anchor over
+    // time — while still reacting immediately to sentiment, sector/country shocks, and
+    // random noise for short-term realism. This keeps long-run prices tied to real
+    // fundamentals instead of drifting to arbitrarily large numbers.
+    const peMultiple = clamp(14 + co.growth*1.3 - (m.globalRate-3.5)*2.2 + (m.globalSentiment/100)*4, 4, 55);
+    const theoreticalCap = co.profit>0 ? co.profit*peMultiple : Math.max(0.05, co.revenue*0.4 + (co.cashRes||0) - (co.debt||0)*0.3);
+    const gapPct = (theoreticalCap-co.marketCap)/Math.max(co.marketCap,0.01);
+    const reversionPull = clamp(gapPct,-1,4) * 0.05 * scale;
+    const sentimentFactor = (m.globalSentiment/100)*0.5*scale/7 + sectorHitPenalty*scale/30 + collapsePenalty*scale/30;
+    const noise = normRand()*(co.volatility/100)*Math.sqrt(scale);
+    const pctChange = reversionPull + sentimentFactor + noise + countryFactor*scale/30;
+    co.prevCap=co.marketCap;
+    co.marketCap=Math.max(0.01, co.marketCap*(1+pctChange));
+    co.price=(co.marketCap*1e12)/co.shares;
 
     const O=priceBefore, C=co.price;
     const wick=Math.abs(co.volatility/100)*rand(0.3,1.1)*(O+C)/2;
@@ -2046,6 +2252,7 @@ function simulateDay(){
   G.day+=1;
   processChainQueue();
   maybeTriggerCrisis(1);
+  checkResourceMonopolyRisk();
   maybeSpawnContract();
   processContracts();
   if(G.day%30===0) collectMonthly();
@@ -2647,32 +2854,55 @@ function renderTutorialUI(){
 let currentScreen="world";
 let openModalKind=null; // 'company' | 'settings' | 'negotiation' | null
 let openModalCompanyId=null;
+let mapDragActive=false; // true while the user has an active pointer-drag on the world map
 
 /* Preserve scroll position and focused-input state across a "background"
    re-render (e.g. triggered by the clock advancing), so the player's current
    view, filters, chart timeframe, and any in-progress typing are not reset.
    Explicit navigation (switchScreen) intentionally still resets scroll. */
+function isEditingFormControl(container){
+  const active=document.activeElement;
+  if(!active || !container || !container.contains(active)) return false;
+  return active.tagName==='SELECT' || active.tagName==='INPUT' || active.tagName==='TEXTAREA';
+}
+/* #content has no fixed height / internal overflow in this layout — the page itself
+   (window/documentElement) is what actually scrolls. These helpers check for an inner
+   scrollable #content first (in case a different host layout ever constrains its height)
+   and fall back to window scrolling, so scroll preservation works correctly either way. */
+function getScrollMetrics(){
+  const contentEl=document.getElementById('content');
+  if(contentEl && contentEl.scrollHeight>contentEl.clientHeight+2){
+    return {top:contentEl.scrollTop, height:contentEl.scrollHeight, setTop:v=>{contentEl.scrollTop=v;}};
+  }
+  return {
+    top: window.scrollY||document.documentElement.scrollTop||document.body.scrollTop||0,
+    height: document.documentElement.scrollHeight,
+    setTop: v=>{ window.scrollTo(0,v); }
+  };
+}
+function resetPageScroll(){
+  const contentEl=document.getElementById('content');
+  if(contentEl) contentEl.scrollTop=0;
+  window.scrollTo(0,0);
+}
 function withPreservedUIState(fn){
   const contentEl=document.getElementById('content');
-  const prevScrollTop=contentEl.scrollTop;
-  const prevScrollHeight=contentEl.scrollHeight;
-  const active=document.activeElement;
-  let focusInfo=null;
-  if(active && contentEl.contains(active) && (active.tagName==='INPUT'||active.tagName==='SELECT'||active.tagName==='TEXTAREA')){
-    focusInfo={id:active.id, value:active.value, selStart:active.selectionStart, selEnd:active.selectionEnd, tag:active.tagName};
-  }
+  // If the user currently has a <select>, <input>, or <textarea> focused inside this
+  // screen — including a native <select> whose dropdown popup may be open right now —
+  // destroying and recreating that DOM node (as any innerHTML-based re-render does)
+  // would close the popup / disrupt typing, even if we tried to restore focus afterward:
+  // a recreated <select> cannot be made to reopen its native popup by calling .focus().
+  // So instead of rebuilding and trying to restore state, we simply skip this background
+  // visual refresh entirely. The underlying game data keeps advancing every tick either
+  // way; we only defer re-syncing this screen's DOM until the user is done interacting
+  // with it (the very next render — on their next click, tab switch, or autoplay tick
+  // after they blur the control — will show the fully caught-up state).
+  if(isEditingFormControl(contentEl) || mapDragActive) return;
+  const before=getScrollMetrics();
   fn();
-  if(focusInfo && focusInfo.id){
-    const el=document.getElementById(focusInfo.id);
-    if(el){
-      el.value=focusInfo.value;
-      try{ el.focus({preventScroll:true}); }catch(e){ el.focus(); }
-      if(focusInfo.tag!=='SELECT' && el.setSelectionRange){ try{ el.setSelectionRange(focusInfo.selStart,focusInfo.selEnd); }catch(e){} }
-    }
-  }
-  const newScrollHeight=contentEl.scrollHeight;
-  const delta=newScrollHeight-prevScrollHeight;
-  contentEl.scrollTop=prevScrollTop+delta;
+  const after=getScrollMetrics();
+  const delta=after.height-before.height;
+  after.setTop(before.top+delta);
 }
 function switchScreen(name){
   currentScreen=name;
@@ -2680,7 +2910,7 @@ function switchScreen(name){
   document.getElementById('screen-'+name).classList.add('active');
   document.querySelectorAll('.navbtn').forEach(b=>b.classList.toggle('active', b.dataset.screen===name));
   renderScreen(name);
-  document.getElementById('content').scrollTop=0;
+  resetPageScroll();
   if(G && G.tutorial && G.tutorial.active && name==='people'){ G.tutorial.flags.visitedPeopleStep=true; }
   checkTutorialProgress();
   renderTutorialUI();
@@ -2696,29 +2926,24 @@ function refreshCompanyModalIfOpen(){
   if(openModalKind!=='company' || !openModalCompanyId) return;
   const modalLayer=document.getElementById('modal-layer');
   if(!modalLayer || !modalLayer.classList.contains('open')) return;
+  const modalBody=document.getElementById('modal-body');
+  // Same principle as withPreservedUIState: never destroy a form control the user is
+  // actively focused in/on (this also protects the chart timeframe buttons' surrounding
+  // markup from flashing mid-interaction). Skip this refresh cycle entirely and catch up
+  // next tick once they're done.
+  if(isEditingFormControl(modalBody)) return;
   const co=G.companies.find(c=>c.id===openModalCompanyId);
   if(!co){ closeModal(); return; }
   const buyEl=document.getElementById('buy-shares');
   const sellEl=document.getElementById('sell-shares');
   const buyVal=buyEl?buyEl.value:null;
   const sellVal=sellEl?sellEl.value:null;
-  const activeEl=document.activeElement;
-  const activeId=activeEl?activeEl.id:null;
-  const selStart=(activeEl&&activeEl.selectionStart!==undefined)?activeEl.selectionStart:null;
-  const modalBody=document.getElementById('modal-body');
   const prevScrollTop=modalBody?modalBody.scrollTop:0;
   openCompanyModal(co.id, {silent:true});
   const newBuyEl=document.getElementById('buy-shares');
   const newSellEl=document.getElementById('sell-shares');
   if(newBuyEl && buyVal!==null){ newBuyEl.value=buyVal; newBuyEl.dispatchEvent(new Event('input')); }
   if(newSellEl && sellVal!==null){ newSellEl.value=sellVal; newSellEl.dispatchEvent(new Event('input')); }
-  if(activeId){
-    const el=document.getElementById(activeId);
-    if(el){
-      try{ el.focus({preventScroll:true}); }catch(e){ el.focus(); }
-      if(selStart!==null && el.setSelectionRange){ try{ el.setSelectionRange(selStart,selStart); }catch(e){} }
-    }
-  }
   const newModalBody=document.getElementById('modal-body');
   if(newModalBody) newModalBody.scrollTop=prevScrollTop;
 }
@@ -2999,7 +3224,7 @@ function wireWorldMap(el){
   let dragging=false, moved=false, startX=0, startY=0, startPan={x:0,y:0};
   const {w,h}=mapNodeLayout();
   svgEl.addEventListener('pointerdown',e=>{
-    dragging=true; moved=false; wrap.classList.add('dragging');
+    dragging=true; moved=false; mapDragActive=true; wrap.classList.add('dragging');
     startX=e.clientX; startY=e.clientY; startPan={...G.uiMapPan};
     try{ svgEl.setPointerCapture(e.pointerId); }catch(err){}
   });
@@ -3016,7 +3241,7 @@ function wireWorldMap(el){
   });
   const endDrag=e=>{
     if(!dragging) return;
-    dragging=false; wrap.classList.remove('dragging');
+    dragging=false; mapDragActive=false; wrap.classList.remove('dragging');
     // Pointer capture on the SVG can redirect the browser's synthetic 'click' event's
     // target to the SVG root itself rather than the node under the finger/cursor, so we
     // resolve the tap target manually here (by actual screen coordinates) instead of
@@ -3032,7 +3257,7 @@ function wireWorldMap(el){
     saveGame();
   };
   svgEl.addEventListener('pointerup',endDrag);
-  svgEl.addEventListener('pointerleave',()=>{ if(dragging){ dragging=false; wrap.classList.remove('dragging'); saveGame(); } });
+  svgEl.addEventListener('pointerleave',()=>{ if(dragging){ dragging=false; mapDragActive=false; wrap.classList.remove('dragging'); saveGame(); } });
   document.getElementById('map-zoom-in').addEventListener('click',()=>{ G.uiMapZoom=clamp((G.uiMapZoom||1)+0.4,1,3); renderWorld(); });
   document.getElementById('map-zoom-out').addEventListener('click',()=>{ G.uiMapZoom=clamp((G.uiMapZoom||1)-0.4,1,3); renderWorld(); });
   document.getElementById('map-zoom-reset').addEventListener('click',()=>{ G.uiMapZoom=1; G.uiMapPan={x:0,y:0}; renderWorld(); });
@@ -3364,7 +3589,73 @@ function bizResources(){
         </div>`;
       }).join('') : `<div class="empty-state">保有ポジションはありません。</div>`}
     </div>
+    <div class="panel">
+      <div class="panel-title">資源権益・世界シェア</div>
+      <div class="row-sub" style="margin-bottom:8px;">生産国の権益を取得すると、その資源の「世界供給シェア」を得られます。50%で市場支配、70%で強力な市場支配、90%で事実上の独占が可能になります。</div>
+      <label class="field-label">資源</label>
+      <select id="right-res-select">${G.resources.map(r=>{
+        const sh=playerResourceWorldShare(r.id);
+        return `<option value="${r.id}" ${r.id===defRes?'selected':''}>${r.name}（世界シェア ${sh.toFixed(1)}%）</option>`;
+      }).join('')}</select>
+      <div id="right-res-body"></div>
+    </div>
   `;
+}
+function resourceRightsBodyHtml(resourceId){
+  const resource=G.resources.find(r=>r.id===resourceId);
+  if(!resource) return '';
+  const share=playerResourceWorldShare(resourceId);
+  const tier=resourceMonopolyTierLabel(share);
+  const state=G.resourceMonopoly[resourceId]||{regulatedUntil:0};
+  const topProducers=Object.entries(resource.countryShares||{}).sort((a,b)=>b[1]-a[1]).slice(0,8)
+    .map(([cid,pct])=>({country:G.countries.find(c=>c.id===cid), pct}))
+    .filter(x=>x.country);
+  const defCountry=G.uiRightCountry||(topProducers[0]&&topProducers[0].country.id)||G.countries[0].id;
+  return `
+    <div class="grid2" style="margin-top:8px;">
+      <div class="metric-box"><div class="lbl">あなたの世界シェア</div><div class="val gold">${share.toFixed(1)}%</div></div>
+      <div class="metric-box"><div class="lbl">支配レベル</div><div class="val">${tier}</div></div>
+    </div>
+    <div class="section-label">主要生産国と世界シェア</div>
+    ${topProducers.map(x=>{
+      const mine=G.player.resourceRights.find(r=>r.resource===resourceId && r.countryId===x.country.id);
+      return `<div class="row"><div class="row-main"><div class="row-title">${x.country.flag} ${x.country.name}</div>
+        <div class="row-sub">世界シェア ${x.pct.toFixed(1)}% ${mine?`・ 保有権益 ${mine.pctOfCountryShare.toFixed(0)}%`:''}</div></div></div>`;
+    }).join('')}
+    <div class="section-label">権益を取得</div>
+    <select id="right-country-select">${topProducers.map(x=>`<option value="${x.country.id}" ${x.country.id===defCountry?'selected':''}>${x.country.flag} ${x.country.name}（世界シェア${x.pct.toFixed(1)}%）</option>`).join('')}</select>
+    <label class="field-label" style="margin-top:8px;">取得する生産比率（%） ・ 現金 ${fmtYen(G.player.cash)}</label>
+    <input type="number" id="right-pct" min="1" max="100" step="5" value="20"/>
+    <button class="btn primary block" id="btn-acquire-right" style="margin-top:8px;">権益を取得する</button>
+    ${share>=50?`
+      <div class="section-label">市場支配アクション</div>
+      ${state.regulatedUntil>G.day?`<div class="tag warn">反独占調査中のため供給操作はできません（残り約${state.regulatedUntil-G.day}日）</div>`:`
+        <div class="row-sub" style="margin-bottom:8px;">供給を削減すると価格が急騰しますが、インフレ・株安・失業増などの連鎖を引き起こし、各国政府の警戒も強めます。</div>
+        <div class="chip-select">
+          <button data-cut="10">10%削減</button>
+          <button data-cut="20">20%削減</button>
+          <button data-cut="30">30%削減</button>
+        </div>
+      `}
+    `:''}
+  `;
+}
+function wireResourceRightsPanel(resourceId){
+  document.getElementById('right-res-body').innerHTML=resourceRightsBodyHtml(resourceId);
+  const countrySel=document.getElementById('right-country-select');
+  if(countrySel) countrySel.addEventListener('change',e=>{ G.uiRightCountry=e.target.value; });
+  const acquireBtn=document.getElementById('btn-acquire-right');
+  if(acquireBtn) acquireBtn.addEventListener('click',()=>{
+    const countryId=document.getElementById('right-country-select').value;
+    const pct=parseFloat(document.getElementById('right-pct').value)||0;
+    const r=acquireResourceRights(resourceId,countryId,pct);
+    if(r.ok){ toast("権益を取得しました"); renderAll(); } else toast(r.msg);
+  });
+  document.querySelectorAll('[data-cut]').forEach(b=>b.addEventListener('click',()=>{
+    if(!confirm(`供給を${b.dataset.cut}%削減しますか？世界市場に大きな影響を与えます。`)) return;
+    const r=cutResourceSupply(resourceId, parseFloat(b.dataset.cut));
+    if(r.ok){ toast("供給操作を実行しました"); renderAll(); } else toast(r.msg);
+  }));
 }
 function bizEnergy(){
   const plants=G.player.plants;
@@ -3497,6 +3788,11 @@ function wireBizTab(tab, el){
       const r=sellResourceHolding(b.dataset.sellRes, sel.value);
       if(r.ok){ toast(`決済しました（${fmtYen(r.revenue)}）`); renderAll(); } else toast(r.msg);
     }));
+    const rightResSel=document.getElementById('right-res-select');
+    if(rightResSel){
+      rightResSel.addEventListener('change',e=>{ G.uiRightResource=e.target.value; wireResourceRightsPanel(e.target.value); });
+      wireResourceRightsPanel(rightResSel.value);
+    }
   } else if(tab==='energy'){
     document.getElementById('btn-build-plant').addEventListener('click',()=>{
       const cId=document.getElementById('plant-country').value;
